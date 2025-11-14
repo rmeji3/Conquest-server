@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Data\App\Migrations\" />
+    <Folder Include="Data\Auth\Migrations\" />
     <Folder Include="Migrations\" />
   </ItemGroup>
 

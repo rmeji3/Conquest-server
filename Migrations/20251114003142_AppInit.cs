@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Conquest.Data.App.Migrations
+namespace Conquestserver.Migrations
 {
     /// <inheritdoc />
-    public partial class InitApp : Migration
+    public partial class AppInit : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text;
 
@@ -32,12 +33,20 @@ namespace Conquest.Controllers.Auth
         [AllowAnonymous]
         public async Task<ActionResult<AuthResponse>> Register(RegisterDto dto)
         {
-            var user = new AppUser
-            {
-                UserName = dto.Email,
+            var user = new AppUser { 
+            
                 Email = dto.Email,
-                DisplayName = dto.DisplayName
+                UserName = dto.UserName,
+                FirstName = dto.FirstName,
+                LastName = dto.LastName
             };
+
+            var existing = await _users.Users
+                .FirstOrDefaultAsync(u => u.UserName == dto.UserName);
+
+            if (existing != null)
+                return BadRequest("Display name is already taken.");
+
 
             var result = await _users.CreateAsync(user, dto.Password);
             if (!result.Succeeded)
@@ -72,7 +81,7 @@ namespace Conquest.Controllers.Auth
             var user = await _users.FindByIdAsync(userId);
             if (user is null) return Unauthorized();
 
-            return new UserDto(user.Id, user.Email ?? "", user.DisplayName);
+            return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.FirstName!, user.LastName!);
         }
 
         [HttpPost("password/forgot")]

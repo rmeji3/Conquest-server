@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Conquest.Data.App.Migrations
+namespace Conquestserver.Migrations
 {
     [DbContext(typeof(AppDbContext))]
     partial class AppDbContextModelSnapshot : ModelSnapshot
@@ -17,7 +17,7 @@ namespace Conquest.Data.App.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
 
-            modelBuilder.Entity("Cuest.Models.Activities.Activity", b =>
+            modelBuilder.Entity("Conquest.Models.Activities.Activity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -43,7 +43,7 @@ namespace Conquest.Data.App.Migrations
                     b.ToTable("Activities");
                 });
 
-            modelBuilder.Entity("Cuest.Models.Places.Place", b =>
+            modelBuilder.Entity("Conquest.Models.Places.Place", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -73,9 +73,9 @@ namespace Conquest.Data.App.Migrations
                     b.ToTable("Places");
                 });
 
-            modelBuilder.Entity("Cuest.Models.Activities.Activity", b =>
+            modelBuilder.Entity("Conquest.Models.Activities.Activity", b =>
                 {
-                    b.HasOne("Cuest.Models.Places.Place", "Place")
+                    b.HasOne("Conquest.Models.Places.Place", "Place")
                         .WithMany("Activities")
                         .HasForeignKey("PlaceId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -84,7 +84,7 @@ namespace Conquest.Data.App.Migrations
                     b.Navigation("Place");
                 });
 
-            modelBuilder.Entity("Cuest.Models.Places.Place", b =>
+            modelBuilder.Entity("Conquest.Models.Places.Place", b =>
                 {
                     b.Navigation("Activities");
                 });

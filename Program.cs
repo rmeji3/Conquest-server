@@ -84,8 +84,11 @@ var app = builder.Build();
 // --- Auto-migrate DB on startup (optional) ---
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-    db.Database.Migrate();
+    var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    authDb.Database.Migrate();
+
+    var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    appDb.Database.Migrate();
 }
 
 // --- Middleware ---
