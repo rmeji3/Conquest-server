@@ -10,7 +10,7 @@ using Conquest.Data.Auth;
 
 namespace Conquest.Controllers
 {
-    [Route("friends")]
+    [Route("api/[controller]")]
     public class FriendsController : ControllerBase
     {
         private readonly UserManager<AppUser> _userManager;

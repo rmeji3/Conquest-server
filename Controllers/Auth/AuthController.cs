@@ -13,7 +13,7 @@ namespace Conquest.Controllers.Auth
 {
 
     [ApiController]
-    [Route("api/v1/[controller]")]
+    [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly UserManager<AppUser> _users;

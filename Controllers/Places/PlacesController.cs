@@ -10,7 +10,7 @@ namespace Conquest.Controllers.Place
     using Conquest.Models.Places;
 
     [ApiController]
-    [Route("api/places")]
+    [Route("api/[controller]")]
     public class PlacesController : ControllerBase
     {
         private readonly AppDbContext _db;
