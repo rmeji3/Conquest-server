@@ -81,7 +81,7 @@ namespace Conquest.Controllers.Auth
             var user = await _users.FindByIdAsync(userId);
             if (user is null) return Unauthorized();
 
-            return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.FirstName!, user.LastName!);
+            return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.FirstName!, user.LastName!, user.ProfileImageUrl);
         }
 
         [HttpPost("password/forgot")]
