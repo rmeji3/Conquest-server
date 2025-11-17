@@ -36,7 +36,9 @@ namespace Conquest.Controllers
                     Id = f.Friend.Id,
                     UserName = f.Friend.UserName!,     // choose only what you want exposed
                     FirstName = f.Friend.FirstName!,
-                    LastName = f.Friend.LastName!
+                    LastName = f.Friend.LastName!,
+                    ProfileImageUrl = f.Friend.ProfileImageUrl
+                    
                 })
                 .ToListAsync();
 
