@@ -11,7 +11,7 @@ namespace Conquest.Controllers.Profiles;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ProfilesController : Controller
+public class ProfilesController : ControllerBase
 {
     private readonly UserManager<AppUser> _userManager;
     public ProfilesController(UserManager<AppUser> userManager)
@@ -48,13 +48,12 @@ public class ProfilesController : Controller
         if (string.IsNullOrWhiteSpace(username))
             return BadRequest("Username query parameter is required.");
 
-        // Case-insensitive search
-        var normalized = username.ToLower();
+        var normalized = username.ToUpper(); // match Identity normalization
 
         var users = await _userManager.Users
-            .Where(u => u.UserName!.ToLower().StartsWith(normalized))
-            .OrderBy(u => u.UserName)        // stable order
-            .Take(15)                        // limit results
+            .Where(u => u.NormalizedUserName!.StartsWith(normalized))
+            .OrderBy(u => u.UserName)
+            .Take(15)
             .Select(u => new ProfileDto(
                 u.Id,
                 u.UserName!,
@@ -66,6 +65,4 @@ public class ProfilesController : Controller
 
         return Ok(users);
     }
-
-    
 }

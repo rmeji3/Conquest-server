@@ -40,12 +40,14 @@ namespace Conquest.Controllers.Auth
                 FirstName = dto.FirstName,
                 LastName = dto.LastName
             };
-
+            
+            var normalized = dto.UserName.ToUpper();
+            
             var existing = await _users.Users
-                .FirstOrDefaultAsync(u => u.UserName == dto.UserName);
+                .FirstOrDefaultAsync(u => u.NormalizedUserName == normalized);
 
             if (existing != null)
-                return BadRequest("Display name is already taken.");
+                return BadRequest("Username is already taken.");
 
 
             var result = await _users.CreateAsync(user, dto.Password);

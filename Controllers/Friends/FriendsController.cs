@@ -1,5 +1,4 @@
-﻿using Conquest.Data.App;
-using Conquest.Models.AppUsers;
+﻿using Conquest.Models.AppUsers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -35,8 +34,8 @@ namespace Conquest.Controllers
                 {
                     Id = f.Friend.Id,
                     UserName = f.Friend.UserName!,     // choose only what you want exposed
-                    FirstName = f.Friend.FirstName!,
-                    LastName = f.Friend.LastName!,
+                    FirstName = f.Friend.FirstName,
+                    LastName = f.Friend.LastName,
                     ProfileImageUrl = f.Friend.ProfileImageUrl
                     
                 })
@@ -172,8 +171,8 @@ namespace Conquest.Controllers
                 {
                     Id = f.User.Id,
                     UserName = f.User.UserName!,
-                    FirstName = f.User.FirstName!,
-                    LastName = f.User.LastName!
+                    FirstName = f.User.FirstName,
+                    LastName = f.User.LastName
                 })
                 .ToListAsync();
             return Ok(requests);
