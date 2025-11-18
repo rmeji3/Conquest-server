@@ -1,5 +1,27 @@
-﻿namespace Conquest.Dtos.Activities
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Conquest.Dtos.Activities
 {
-    public record CreateActivityDto(int PlaceId, string Type, string? Notes);
-    public record ActivityDetailsDto(int Id, int PlaceId, string Type, string? Notes, DateTime CreatedUtc);
+    public record CreateActivityDto(
+        int PlaceId,
+        [MaxLength(100)] string Name,
+        int? ActivityKindId,
+        [MaxLength(2000)] string? Description
+    );
+
+    public record ActivityDetailsDto(
+        int Id,
+        int PlaceId, 
+        string Name,
+        int? ActivityKindId,
+        string? ActivityKindName,
+        string? Description,
+        DateTime CreatedUtc
+    );
+    
+    public record ActivityKindDto(int Id, string Name);
+
+    public record CreateActivityKindDto(
+        [Required, MaxLength(100)] string Name
+    );
 }

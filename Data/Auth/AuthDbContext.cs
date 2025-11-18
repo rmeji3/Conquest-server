@@ -1,14 +1,14 @@
 ﻿namespace Conquest.Data.Auth
 {
-    using Conquest.Models.AppUsers;
-    using Conquest.Models.Friends;
+    using Models.AppUsers;
+    using Models.Friends;
     using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
     using Microsoft.EntityFrameworkCore;
 
-    public class AuthDbContext : IdentityDbContext<AppUser>
+    public class AuthDbContext(DbContextOptions<AuthDbContext> options) : IdentityDbContext<AppUser>(options)
     {
-        public DbSet<Friendship> Friendships { get; set; } = null!;
-        public AuthDbContext(DbContextOptions<AuthDbContext> options) : base(options) { }
+        public DbSet<Friendship> Friendships { get; init; } = null!;
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

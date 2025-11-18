@@ -1,4 +1,5 @@
-﻿using Conquest.Models.Activities;
+﻿using System.ComponentModel.DataAnnotations;
+using Conquest.Models.Activities;
 using Conquest.Models.Reviews;
 
 namespace Conquest.Models.Places
@@ -6,12 +7,13 @@ namespace Conquest.Models.Places
     public class Place
     {
         public int Id { get; set; }
-        public string Name { get; set; } = null!;
-        public string Address { get; set; } = string.Empty;
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
-        public ICollection<Activity> Activities { get; set; } = new List<Activity>();
-        public ICollection<Review> Reviews { get; set; } = new List<Review>();
-        public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+        [MaxLength(200)]
+        public required string Name { get; set; } = null!;
+        [MaxLength(300)]
+        public string? Address { get; init; }
+        public double Latitude { get; init; }
+        public double Longitude { get; init; }
+        public ICollection<PlaceActivity> PlaceActivities { get; set; } = [];
+        public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
     }
 }

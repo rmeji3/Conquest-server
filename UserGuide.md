@@ -10,13 +10,13 @@ This exception can be suppressed or logged by passing event ID 'RelationalEventI
 ```
 ### Run the following commands to migrate sqlite server (AuthDBContext in this case):
 ```bash
-dotnet ef migrations add AuthDBContextChanges --context Conquest.Data.App.AppDbContext
-dotnet ef database update --context Conquest.Data.App.AppDbContext
+dotnet ef migrations add initAuthDb --context Conquest.Data.Auth.AuthDbContext
+dotnet ef database update --context Conquest.Data.Auth.AuthDbContext
 ```
 ### Run the following commands to migrate sqlite server (AppDBContext in this case):
 ```bash
-dotnet ef migrations add AppDBContextChanges --context Conquest.Data.Auth.AppDBContext
-dotnet ef database update --context Conquest.Data.Auth.AppDBContext
+dotnet ef migrations add initAppDb --context Conquest.Data.App.AppDBContext
+dotnet ef database update --context Conquest.Data.App.AppDBContext
 ```
 ### Note:
 These are the commands without names so you can replace the names with your own if needed.
