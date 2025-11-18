@@ -11,14 +11,8 @@ namespace Conquest.Controllers.Profiles;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ProfilesController : ControllerBase
+public class ProfilesController(UserManager<AppUser> userManager) : ControllerBase
 {
-    private readonly UserManager<AppUser> _userManager;
-    public ProfilesController(UserManager<AppUser> userManager)
-    {
-        _userManager = userManager;
-    }
-    
     // GET /api/profiles/me
     [HttpGet("me")]
     public async Task<ActionResult<PersonalProfileDto>> Me()
@@ -26,7 +20,7 @@ public class ProfilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) return Unauthorized();
 
-        var user = await _userManager.FindByIdAsync(userId);
+        var user = await userManager.FindByIdAsync(userId);
         if (user is null) return Unauthorized();
 
         var profile = new PersonalProfileDto(
@@ -41,7 +35,7 @@ public class ProfilesController : ControllerBase
         return Ok(profile);
     }
     
-    // GET /api/profiles/search?username=someusername
+    // GET /api/profiles/search?username=someUsername
     [HttpGet("search")]
     public async Task<ActionResult<List<ProfileDto>>> Search([FromQuery] string username)
     {
@@ -49,9 +43,12 @@ public class ProfilesController : ControllerBase
             return BadRequest("Username query parameter is required.");
 
         var normalized = username.ToUpper(); // match Identity normalization
+        
+        var yourUsername = User.FindFirstValue(ClaimTypes.Name);
 
-        var users = await _userManager.Users
-            .Where(u => u.NormalizedUserName!.StartsWith(normalized))
+        var users = await userManager.Users
+            .Where(u => u.NormalizedUserName!.StartsWith(normalized)
+            && !u.NormalizedUserName.Equals(yourUsername, StringComparison.CurrentCultureIgnoreCase)) // exclude yourself
             .OrderBy(u => u.UserName)
             .Take(15)
             .Select(u => new ProfileDto(

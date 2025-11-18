@@ -13,16 +13,8 @@ namespace Conquest.Controllers.Events{
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class EventsController : Controller {
-    
-        private readonly AppDbContext _db;
-        private readonly UserManager<AppUser> _userManager;
-        public EventsController(AppDbContext db, UserManager<AppUser> userManager)
-        {
-            _db = db;
-            _userManager = userManager;
-        }
-
+    public class EventsController(AppDbContext db, UserManager<AppUser> userManager) : Controller
+    {
         // POST /api/Events/create
         [HttpPost("create")]
         public async Task<ActionResult<EventDto>> Create([FromBody] CreateEventDto dto)
@@ -53,7 +45,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
 
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await userManager.FindByIdAsync(userId);
             if (user is null)
                 return Unauthorized();
             var newEvent = new Event
@@ -72,8 +64,8 @@ namespace Conquest.Controllers.Events{
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude
             };
-            _db.Events.Add(newEvent);
-            await _db.SaveChangesAsync();
+            db.Events.Add(newEvent);
+            await db.SaveChangesAsync();
             
             var createdBySummary = new UserSummaryDto(
                 user.Id,
@@ -106,14 +98,14 @@ namespace Conquest.Controllers.Events{
         [HttpGet("{id:int}")]
         public async Task<ActionResult<EventDto>> GetById(int id)
         {
-            var ev = await _db.Events
+            var ev = await db.Events
                 .Include(e => e.Attendees)
                 .FirstOrDefaultAsync(e => e.Id == id);
             
             if (ev == null)
                 return NotFound();
 
-            var creator = await _userManager.FindByIdAsync(ev.CreatedById);
+            var creator = await userManager.FindByIdAsync(ev.CreatedById);
             if(creator is null) return BadRequest("Event creator not found.");
 
             var creatorSummary = new UserSummaryDto(
@@ -129,7 +121,7 @@ namespace Conquest.Controllers.Events{
                 .Distinct()
                 .ToList();
 
-            var attendeeUsers = await _userManager.Users
+            var attendeeUsers = await userManager.Users
                 .Where(u => attendeeIds.Contains(u.Id))
                 .ToListAsync();
 
@@ -180,7 +172,7 @@ namespace Conquest.Controllers.Events{
                 return Unauthorized();
 
             // Load the creator once
-            var creator = await _userManager.FindByIdAsync(userId);
+            var creator = await userManager.FindByIdAsync(userId);
             if (creator is null)
                 return Unauthorized();
 
@@ -191,7 +183,7 @@ namespace Conquest.Controllers.Events{
                 creator.LastName
             );
 
-            var myEvents = await _db.Events
+            var myEvents = await db.Events
                 .Where(e => e.CreatedById == userId)
                 .Include(e => e.Attendees)
                 .OrderBy(e => e.StartTime)
@@ -207,7 +199,7 @@ namespace Conquest.Controllers.Events{
                     .Distinct()
                     .ToList();
 
-                var attendeeUsers = await _userManager.Users
+                var attendeeUsers = await userManager.Users
                     .Where(u => attendeeIds.Contains(u.Id))
                     .ToListAsync();
 
@@ -258,7 +250,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
             
-            var attendingEvents = await _db.Events
+            var attendingEvents = await db.Events
                 .Where(e => e.Attendees.Any(a => a.UserId == userId))
                 .Include(e => e.Attendees)
                 .OrderBy(e => e.StartTime)
@@ -267,7 +259,7 @@ namespace Conquest.Controllers.Events{
             var result = new List<EventDto>();
             foreach (var ev in attendingEvents)
             {
-                var creator = await _userManager.FindByIdAsync(ev.CreatedById);
+                var creator = await userManager.FindByIdAsync(ev.CreatedById);
                 if (creator is null) continue; // skip if creator not found
 
                 var creatorSummary = new UserSummaryDto(
@@ -283,7 +275,7 @@ namespace Conquest.Controllers.Events{
                     .Distinct()
                     .ToList();
 
-                var attendeeUsers = await _userManager.Users
+                var attendeeUsers = await userManager.Users
                     .Where(u => attendeeIds.Contains(u.Id))
                     .ToListAsync();
 
@@ -333,7 +325,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
 
-            var ev = await _db.Events
+            var ev = await db.Events
                 .Include(e => e.Attendees)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (ev == null)
@@ -356,8 +348,8 @@ namespace Conquest.Controllers.Events{
                 UserId = userId,
                 JoinedAt = DateTime.UtcNow
             };
-            _db.EventAttendees.Add(attendee);
-            await _db.SaveChangesAsync();
+            db.EventAttendees.Add(attendee);
+            await db.SaveChangesAsync();
 
             return Ok("You are now attending the event.");
         }
@@ -370,7 +362,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
 
-            var ev = await _db.Events
+            var ev = await db.Events
                 .Include(e => e.Attendees)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (ev == null)
@@ -383,8 +375,8 @@ namespace Conquest.Controllers.Events{
                 return BadRequest("You are not attending this event.");
 
             // Remove attendee
-            _db.EventAttendees.Remove(attendee);
-            await _db.SaveChangesAsync();
+            db.EventAttendees.Remove(attendee);
+            await db.SaveChangesAsync();
 
             return Ok("You have left the event.");
         }
@@ -397,7 +389,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
 
-            var ev = await _db.Events
+            var ev = await db.Events
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (ev == null)
                 return NotFound("Event not found.");
@@ -406,8 +398,8 @@ namespace Conquest.Controllers.Events{
             if (ev.CreatedById != userId)
                 return Forbid("You are not authorized to delete this event.");
 
-            _db.Events.Remove(ev);
-            await _db.SaveChangesAsync();
+            db.Events.Remove(ev);
+            await db.SaveChangesAsync();
 
             return Ok("Event deleted successfully.");
         }
@@ -420,7 +412,7 @@ namespace Conquest.Controllers.Events{
             if (userId is null)
                 return Unauthorized();
 
-            var ev = await _db.Events
+            var ev = await db.Events
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (ev == null)
                 return NotFound("Event not found.");
@@ -443,7 +435,7 @@ namespace Conquest.Controllers.Events{
             if (!string.IsNullOrWhiteSpace(dto.Location))
                 ev.Location = dto.Location.Trim();
 
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
 
             return Ok("Event updated successfully.");
         }
@@ -462,7 +454,7 @@ namespace Conquest.Controllers.Events{
             var now = DateTime.UtcNow;
 
             // 1) Start with a plain IQueryable<Event>
-            IQueryable<Event> query = _db.Events
+            IQueryable<Event> query = db.Events
                 .Where(e => e.IsPublic && e.EndTime >= now);
 
             // 2) Optional date filters
@@ -473,7 +465,7 @@ namespace Conquest.Controllers.Events{
                 query = query.Where(e => e.StartTime <= to.Value);
 
             // 3) Optional location filter (simple bounding box)
-            if (lat.HasValue && lng.HasValue && radiusKm.HasValue && radiusKm.Value > 0)
+            if (lat.HasValue && lng.HasValue && radiusKm is > 0)
             {
                 var centerLat = lat.Value;
                 var centerLng = lng.Value;
@@ -508,7 +500,7 @@ namespace Conquest.Controllers.Events{
             foreach (var ev in events)
             {
                 // creator
-                var creator = await _userManager.FindByIdAsync(ev.CreatedById);
+                var creator = await userManager.FindByIdAsync(ev.CreatedById);
                 if (creator is null)
                     continue;
 
@@ -525,7 +517,7 @@ namespace Conquest.Controllers.Events{
                     .Distinct()
                     .ToList();
 
-                var attendeeUsers = await _userManager.Users
+                var attendeeUsers = await userManager.Users
                     .Where(u => attendeeIds.Contains(u.Id))
                     .ToListAsync();
 

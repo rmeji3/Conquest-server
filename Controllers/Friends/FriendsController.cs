@@ -10,25 +10,16 @@ using Conquest.Data.Auth;
 namespace Conquest.Controllers
 {
     [Route("api/[controller]")]
-    public class FriendsController : ControllerBase
+    public class FriendsController(AuthDbContext appContext, UserManager<AppUser> userManager) : ControllerBase
     {
-        private readonly UserManager<AppUser> _userManager;
-        private readonly AuthDbContext _context;
-
-        public FriendsController(AuthDbContext appContext, UserManager<AppUser> userManager)
-        {
-            _context = appContext;
-            _userManager = userManager;
-        }
-
         [Authorize]
         [HttpGet("friends")]
         public async Task<IActionResult> GetMyFriends()
         {
-            var me = await _userManager.GetUserAsync(User);
+            var me = await userManager.GetUserAsync(User);
             if (me is null) return Unauthorized();
 
-            var friends = await _context.Friendships
+            var friends = await appContext.Friendships
                 .Where(f => f.UserId == me.Id && f.Status == Friendship.FriendshipStatus.Accepted)
                 .Select(f => new FriendSummaryDto
                 {
@@ -48,10 +39,10 @@ namespace Conquest.Controllers
         [HttpPost("add/{username}")]
         public async Task<IActionResult> AddFriend(string username)
         {
-            var me = await _userManager.GetUserAsync(User);
+            var me = await userManager.GetUserAsync(User);
             if (me is null) return Unauthorized();
 
-            var friend = await _userManager.FindByNameAsync(username);
+            var friend = await userManager.FindByNameAsync(username);
 
             if (friend is null) return NotFound("User not found.");
 
@@ -62,7 +53,7 @@ namespace Conquest.Controllers
             var friendId = friend.Id;
 
             // if we already have any Accepted link either direction, they're friends
-            var alreadyFriends = await _context.Friendships.AnyAsync(f =>
+            var alreadyFriends = await appContext.Friendships.AnyAsync(f =>
                 ((f.UserId == userId && f.FriendId == friendId) ||
                  (f.UserId == friendId && f.FriendId == userId)) &&
                 f.Status == Friendship.FriendshipStatus.Accepted);
@@ -70,7 +61,7 @@ namespace Conquest.Controllers
             if (alreadyFriends) return Conflict("Already friends.");
 
             // did I already send a pending request to them?
-            var existingOutgoing = await _context.Friendships.FirstOrDefaultAsync(f =>
+            var existingOutgoing = await appContext.Friendships.FirstOrDefaultAsync(f =>
                 f.UserId == userId &&
                 f.FriendId == friendId &&
                 f.Status == Friendship.FriendshipStatus.Pending);
@@ -79,7 +70,7 @@ namespace Conquest.Controllers
                 return BadRequest("You already sent a friend request to this user.");
 
             // did THEY already send a pending request to ME?
-            var existingIncoming = await _context.Friendships.FirstOrDefaultAsync(f =>
+            var existingIncoming = await appContext.Friendships.FirstOrDefaultAsync(f =>
                 f.UserId == friendId &&
                 f.FriendId == userId &&
                 f.Status == Friendship.FriendshipStatus.Pending);
@@ -88,7 +79,7 @@ namespace Conquest.Controllers
                 return BadRequest("This user already sent you a request. Accept it instead.");
 
             // have they blocked me?
-            var blocked = await _context.Friendships.FirstOrDefaultAsync(f =>
+            var blocked = await appContext.Friendships.FirstOrDefaultAsync(f =>
                 f.UserId == friendId &&
                 f.FriendId == userId &&
                 f.Status == Friendship.FriendshipStatus.Blocked);
@@ -105,8 +96,8 @@ namespace Conquest.Controllers
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.Friendships.Add(friendship);
-            await _context.SaveChangesAsync();
+            appContext.Friendships.Add(friendship);
+            await appContext.SaveChangesAsync();
 
             return Ok("Friend request sent!");
         }
@@ -115,17 +106,17 @@ namespace Conquest.Controllers
         [HttpPost("accept/{username}")]
         public async Task<IActionResult> AcceptFriend(string username)
         {
-            var me = await _userManager.GetUserAsync(User);
+            var me = await userManager.GetUserAsync(User);
             if (me is null) { return Unauthorized(); }
 
-            var friend = await _userManager.FindByNameAsync(username);
+            var friend = await userManager.FindByNameAsync(username);
             if (friend is null) { return NotFound("User not found."); }
 
             var userId = me.Id;
             var friendId = friend.Id;
 
             // find pending request sent by THEM to ME
-            var pendingRequest = await _context.Friendships
+            var pendingRequest = await appContext.Friendships
                 .FirstOrDefaultAsync(f =>
                     f.UserId == friendId &&
                     f.FriendId == userId &&
@@ -137,15 +128,15 @@ namespace Conquest.Controllers
             // update the request to Accepted
             pendingRequest.Status = Friendship.FriendshipStatus.Accepted;
 
-            // also add reverse link if it doesn’t exist yet
-            var reverseExists = await _context.Friendships.AnyAsync(f =>
+            // also add reverse link if it does not exist yet
+            var reverseExists = await appContext.Friendships.AnyAsync(f =>
                 f.UserId == userId &&
                 f.FriendId == friendId &&
                 f.Status == Friendship.FriendshipStatus.Accepted);
 
             if (!reverseExists)
             {
-                _context.Friendships.Add(new Friendship
+                appContext.Friendships.Add(new Friendship
                 {
                     UserId = userId,
                     FriendId = friendId,
@@ -154,7 +145,7 @@ namespace Conquest.Controllers
                 });
             }
 
-            await _context.SaveChangesAsync();
+            await appContext.SaveChangesAsync();
 
             return Ok("Friend request accepted.");
         }
@@ -163,9 +154,9 @@ namespace Conquest.Controllers
         [HttpPost("requests/incoming")]
         public async Task<IActionResult> GetIncomingRequests()
         {
-            var me = await _userManager.GetUserAsync(User);
+            var me = await userManager.GetUserAsync(User);
             if (me is null) return Unauthorized();
-            var requests = await _context.Friendships
+            var requests = await appContext.Friendships
                 .Where(f => f.FriendId == me.Id && f.Status == Friendship.FriendshipStatus.Pending)
                 .Select(f => new FriendSummaryDto
                 {
@@ -182,23 +173,23 @@ namespace Conquest.Controllers
         [HttpPost("remove/{username}")]
         public async Task<IActionResult> RemoveFriend(string username)
         {
-            var me = await _userManager.GetUserAsync(User);
+            var me = await userManager.GetUserAsync(User);
             if (me is null) return Unauthorized();
-            var friend = await _userManager.FindByNameAsync(username);
+            var friend = await userManager.FindByNameAsync(username);
             if (friend is null) return NotFound("User not found.");
             var userId = me.Id;
             var friendId = friend.Id;
-            var friendship1 = await _context.Friendships
+            var friendship1 = await appContext.Friendships
                 .FirstOrDefaultAsync(f => f.UserId == userId && f.FriendId == friendId && f.Status == Friendship.FriendshipStatus.Accepted);
-            var friendship2 = await _context.Friendships
+            var friendship2 = await appContext.Friendships
                 .FirstOrDefaultAsync(f => f.UserId == friendId && f.FriendId == userId && f.Status == Friendship.FriendshipStatus.Accepted);
             if (friendship1 is null && friendship2 is null)
                 return BadRequest("You are not friends with this user.");
             if (friendship1 is not null)
-                _context.Friendships.Remove(friendship1);
+                appContext.Friendships.Remove(friendship1);
             if (friendship2 is not null)
-                _context.Friendships.Remove(friendship2);
-            await _context.SaveChangesAsync();
+                appContext.Friendships.Remove(friendship2);
+            await appContext.SaveChangesAsync();
             return Ok("Friend removed.");
         }
     }

@@ -14,21 +14,13 @@ namespace Conquest.Controllers.Auth
 
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public class AuthController(
+        UserManager<AppUser> users,
+        SignInManager<AppUser> signIn,
+        ITokenService tokens,
+        IHostEnvironment env)
+        : ControllerBase
     {
-        private readonly UserManager<AppUser> _users;
-        private readonly SignInManager<AppUser> _signIn;
-        private readonly ITokenService _tokens;
-        private readonly IHostEnvironment _env;
-
-        public AuthController(UserManager<AppUser> users, SignInManager<AppUser> signIn, ITokenService tokens, IHostEnvironment env)
-        {
-            _users = users;
-            _signIn = signIn;
-            _tokens = tokens;
-            _env = env;
-        }
-
         [HttpPost("register")]
         [AllowAnonymous]
         public async Task<ActionResult<AuthResponse>> Register(RegisterDto dto)
@@ -43,34 +35,34 @@ namespace Conquest.Controllers.Auth
             
             var normalized = dto.UserName.ToUpper();
             
-            var existing = await _users.Users
+            var existing = await users.Users
                 .FirstOrDefaultAsync(u => u.NormalizedUserName == normalized);
 
             if (existing != null)
                 return BadRequest("Username is already taken.");
 
 
-            var result = await _users.CreateAsync(user, dto.Password);
+            var result = await users.CreateAsync(user, dto.Password);
             if (!result.Succeeded)
                 return BadRequest(result.Errors.Select(e => e.Description));
 
             // Optional: add default role
             // await _users.AddToRoleAsync(user, "User");
 
-            return await _tokens.CreateAuthResponseAsync(user);
+            return await tokens.CreateAuthResponseAsync(user);
         }
 
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<ActionResult<AuthResponse>> Login(LoginDto dto)
         {
-            var user = await _users.FindByEmailAsync(dto.Email);
+            var user = await users.FindByEmailAsync(dto.Email);
             if (user is null) return Unauthorized("Invalid credentials.");
 
-            var result = await _signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
+            var result = await signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
             if (!result.Succeeded) return Unauthorized("Invalid credentials.");
 
-            return await _tokens.CreateAuthResponseAsync(user);
+            return await tokens.CreateAuthResponseAsync(user);
         }
 
         [HttpGet("me")]
@@ -80,20 +72,20 @@ namespace Conquest.Controllers.Auth
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null) return Unauthorized();
 
-            var user = await _users.FindByIdAsync(userId);
+            var user = await users.FindByIdAsync(userId);
             if (user is null) return Unauthorized();
 
-            return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.FirstName!, user.LastName!, user.ProfileImageUrl);
+            return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.FirstName, user.LastName, user.ProfileImageUrl);
         }
 
         [HttpPost("password/forgot")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
-            var user = await _users.FindByEmailAsync(dto.Email);
+            var user = await users.FindByEmailAsync(dto.Email);
             // Always 200 to avoid account enumeration
             if (user == null) return Ok(new { message = "If the account exists, a reset link has been sent." });
 
-            var token = await _users.GeneratePasswordResetTokenAsync(user);
+            var token = await users.GeneratePasswordResetTokenAsync(user);
             var encoded = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
 
             // Build a link your mobile/web client can handle (adjust to your scheme/route)
@@ -101,7 +93,7 @@ namespace Conquest.Controllers.Auth
 
             // TODO: Send 'link' via your email service (IEmailSender, SendGrid, etc.)
             // For development: return token so you can test without email.
-            if (_env.IsDevelopment())
+            if (env.IsDevelopment())
             {
                 return Ok(new
                 {
@@ -118,7 +110,7 @@ namespace Conquest.Controllers.Auth
         [HttpPost("password/reset")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
-            var user = await _users.FindByEmailAsync(dto.Email);
+            var user = await users.FindByEmailAsync(dto.Email);
             // Always 200 to avoid account enumeration
             if (user == null) return Ok(new { message = "Password has been reset if the account exists." });
 
@@ -132,7 +124,7 @@ namespace Conquest.Controllers.Auth
                 return BadRequest(new { error = "Invalid token format." });
             }
 
-            var result = await _users.ResetPasswordAsync(user, decodedToken, dto.NewPassword);
+            var result = await users.ResetPasswordAsync(user, decodedToken, dto.NewPassword);
             if (!result.Succeeded)
             {
                 return BadRequest(new
@@ -149,10 +141,10 @@ namespace Conquest.Controllers.Auth
         [HttpPost("password/change")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
-            var user = await _users.GetUserAsync(User);
+            var user = await users.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            var result = await _users.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+            var result = await users.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
             if (!result.Succeeded)
             {
                 return BadRequest(new

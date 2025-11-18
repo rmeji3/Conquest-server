@@ -3,21 +3,13 @@ using Conquest.Data.App;
 using Conquest.Dtos.Reviews;
 using Conquest.Models.Reviews;
 using Microsoft.AspNetCore.Mvc;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace Conquest.Controllers.ReviewsController;
 [ApiController]
 [Route("api/Places/{placeId:int}/[controller]")]
-public class ReviewsController : ControllerBase
+public class ReviewsController(AppDbContext db) : ControllerBase
 {
-    private readonly AppDbContext _db;
-
-    public ReviewsController(AppDbContext db)
-    {
-        _db = db;
-    }
-
     [HttpPost]
     public async Task<ActionResult<ReviewDto>> CreateReview( int placeId, CreateReviewDto dto)
     {
@@ -29,7 +21,7 @@ public class ReviewsController : ControllerBase
             return Unauthorized("User is not authenticated or missing id/username.");
         }
         
-        var alreadyReviewed = await _db.Reviews
+        var alreadyReviewed = await db.Reviews
             .AnyAsync(r => r.PlaceId == placeId && r.UserId == userId);
 
         if (alreadyReviewed)
@@ -47,8 +39,8 @@ public class ReviewsController : ControllerBase
             CreatedAt = DateTime.UtcNow,
         };
 
-        _db.Reviews.Add(review);
-        await _db.SaveChangesAsync();
+        db.Reviews.Add(review);
+        await db.SaveChangesAsync();
 
         return Ok(new ReviewDto(
             review.Id, review.Rating, review.Content, User.Identity!.Name!, review.CreatedAt
@@ -58,7 +50,7 @@ public class ReviewsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ReviewDto>>> GetReviews(int placeId)
     {
-        return Ok(await _db.Reviews
+        return Ok(await db.Reviews
             .Where(r => r.PlaceId == placeId)
             .OrderByDescending(r => r.CreatedAt)
             .Select(r => new ReviewDto(

@@ -1,24 +1,18 @@
-﻿using Microsoft.AspNetCore.Mvc;
-
-namespace Conquest.Controllers.Place
+﻿namespace Conquest.Controllers.Place
 {
-    using Conquest.Data.App;
-    using Conquest.Dtos.Places;
+    using Data.App;
+    using Dtos.Places;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.EntityFrameworkCore;
-    using static Conquest.Dtos.Places.PlaceDto;
-    using Conquest.Models.Places;
+    using Models.Places;
 
     [ApiController]
     [Route("api/[controller]")]
-    public class PlacesController : ControllerBase
+    public class PlacesController(AppDbContext db) : ControllerBase
     {
-        private readonly AppDbContext _db;
-        public PlacesController(AppDbContext db) => _db = db;
-
         // POST /api/places
         [HttpPost]
-        public async Task<ActionResult<PlaceDto>> Create([FromBody] UpsertPlaceDto dto)
+        public async Task<ActionResult<PlaceDetailsDto>> Create([FromBody] UpsertPlaceDto dto)
         {
             var place = new Place
             {
@@ -27,8 +21,8 @@ namespace Conquest.Controllers.Place
                 Latitude = dto.Latitude,
                 Longitude = dto.Longitude
             };
-            _db.Places.Add(place);
-            await _db.SaveChangesAsync();
+            db.Places.Add(place);
+            await db.SaveChangesAsync();
 
             // Fix for IDE0305: Use collection initializer for Array.Empty<string>()
             var result = new PlaceDetailsDto(
@@ -46,7 +40,7 @@ namespace Conquest.Controllers.Place
         [HttpGet("{id:int}")]
         public async Task<ActionResult<PlaceDetailsDto>> GetById(int id)
         {
-            var p = await _db.Places.Include(x => x.Activities).FirstOrDefaultAsync(x => x.Id == id);
+            var p = await db.Places.Include(x => x.Activities).FirstOrDefaultAsync(x => x.Id == id);
             if (p == null) return NotFound();
             return Ok(new PlaceDetailsDto(
                 p.Id,
@@ -74,7 +68,7 @@ namespace Conquest.Controllers.Place
             var minLng = lng - lngDelta;
             var maxLng = lng + lngDelta;
 
-            var q = _db.Places
+            var q = db.Places
                 .Where(p => p.Latitude >= minLat && p.Latitude <= maxLat &&
                             p.Longitude >= minLng && p.Longitude <= maxLng)
                 .Include(p => p.Activities)

@@ -6,14 +6,13 @@ using Conquest.Models.Reviews;
 
 namespace Conquest.Data.App
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext(DbContextOptions<AppDbContext> opt) : DbContext(opt)
     {
-        public AppDbContext(DbContextOptions<AppDbContext> opt) : base(opt) { }
         public DbSet<Place> Places => Set<Place>();
         public DbSet<Activity> Activities => Set<Activity>();
         public DbSet<Review> Reviews => Set<Review>();
-        public DbSet<Event> Events { get; set; } = null!;
-        public DbSet<EventAttendee> EventAttendees { get; set; } = null!;
+        public DbSet<Event> Events { get; init; } = null!;
+        public DbSet<EventAttendee> EventAttendees { get; init; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

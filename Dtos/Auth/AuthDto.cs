@@ -1,14 +1,14 @@
 ﻿namespace Conquest.Dtos.Auth
 {
-    using Conquest.Models.AppUsers;
+    using Models.AppUsers;
     using System.ComponentModel.DataAnnotations;
 
     public class JwtOptions
     {
-        public string Key { get; set; } = default!;
-        public string Issuer { get; set; } = default!;
-        public string Audience { get; set; } = default!;
-        public int AccessTokenMinutes { get; set; } = 60;
+        public string Key { get; init; } = default!;
+        public string Issuer { get; init; } = default!;
+        public string Audience { get; init; } = default!;
+        public int AccessTokenMinutes { get; init; } = 60;
     }
     public record RegisterDto(
         [Required, EmailAddress] string Email,
