@@ -48,7 +48,7 @@ public class ProfilesController(UserManager<AppUser> userManager) : ControllerBa
 
         var users = await userManager.Users
             .Where(u => u.NormalizedUserName!.StartsWith(normalized)
-            && !u.NormalizedUserName.Equals(yourUsername, StringComparison.CurrentCultureIgnoreCase)) // exclude yourself
+            && u.NormalizedUserName != yourUsername!.ToUpper()) // exclude yourself
             .OrderBy(u => u.UserName)
             .Take(15)
             .Select(u => new ProfileDto(
