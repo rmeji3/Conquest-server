@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using Conquest.Data.Auth;
-using Conquest.Dtos.Auth;
 using Conquest.Dtos.Profiles;
 using Conquest.Models.AppUsers;
 using Microsoft.AspNetCore.Authorization;
@@ -15,17 +13,15 @@ namespace Conquest.Controllers.Profiles;
 [Authorize]
 public class ProfilesController : Controller
 {
-    private readonly AuthDbContext _db;
     private readonly UserManager<AppUser> _userManager;
-    public ProfilesController(AuthDbContext db, UserManager<AppUser> userManager)
+    public ProfilesController(UserManager<AppUser> userManager)
     {
-        _db = db;
         _userManager = userManager;
     }
     
     // GET /api/profiles/me
     [HttpGet("me")]
-    public async Task<ActionResult<ProfileDto>> Me()
+    public async Task<ActionResult<PersonalProfileDto>> Me()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) return Unauthorized();
@@ -33,7 +29,15 @@ public class ProfilesController : Controller
         var user = await _userManager.FindByIdAsync(userId);
         if (user is null) return Unauthorized();
 
-        var profile = new PersonalProfileDto(user.Id, user.UserName, user.FirstName, user.LastName, user.ProfileImageUrl, user.Email);
+        var profile = new PersonalProfileDto(
+            user.Id,
+            user.UserName!,           // ensure not null
+            user.FirstName,
+            user.LastName,
+            user.ProfileImageUrl,
+            user.Email!
+        );
+        
         return Ok(profile);
     }
     
@@ -48,12 +52,12 @@ public class ProfilesController : Controller
         var normalized = username.ToLower();
 
         var users = await _userManager.Users
-            .Where(u => u.UserName.ToLower().StartsWith(normalized))
+            .Where(u => u.UserName!.ToLower().StartsWith(normalized))
             .OrderBy(u => u.UserName)        // stable order
             .Take(15)                        // limit results
             .Select(u => new ProfileDto(
                 u.Id,
-                u.UserName,
+                u.UserName!,
                 u.FirstName,
                 u.LastName,
                 u.ProfileImageUrl
