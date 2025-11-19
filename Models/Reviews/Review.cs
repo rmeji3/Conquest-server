@@ -1,19 +1,20 @@
-using Conquest.Models.AppUsers;
+using System.ComponentModel.DataAnnotations;
 using Conquest.Models.Places;
 
 namespace Conquest.Models.Reviews;
 
 public class Review
 {
-    public int Id { get; set; }
-
-    public int PlaceId { get; set; }
-    public string UserId { get; set; } = null!;
-
-    public int Rating { get; set; }
-    public string Content { get; set; } = null!;
-    public DateTime CreatedAt { get; set; }
-
-    public Place Place { get; set; } = null!;
-    public string UserName { get; set; } = null!;
+    public int Id { get; init; }
+    [MaxLength(200)]
+    public string UserId { get; init; } = null!;  // FK reference only
+    [MaxLength(100)]
+    public string UserName { get; init; } = null!;
+    public int PlaceActivityId { get; set; }
+    public PlaceActivity PlaceActivity { get; set; } = null!;
+    public int Rating { get; init; }
+    [MaxLength(1000)]
+    public string? Content { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public List<ReviewTag> ReviewTags { get; set; } = new();
 }

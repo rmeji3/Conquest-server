@@ -1,0 +1,324 @@
+# Conquest Server Guide
+
+Comprehensive internal documentation of the current server codebase. This guide is designed to give an AI agent (and developers) full context of the project structure: endpoints, models, DTOs, services, data contexts, and architectural decisions.
+
+## Table of Contents
+1. Overview
+2. Project Structure
+3. Configuration & Startup (`Program.cs`)
+4. Authentication & Authorization
+5. Database Contexts & Persistence Layer
+6. Domain Models
+7. DTO Contracts
+8. Services
+9. Controllers & Endpoints (Full Reference)
+10. Validation & Business Rules
+11. Indexes, Seed Data, and Performance Notes
+12. Migration & EF Core Operations (Legacy Notes Included)
+13. Conventions & Extension Points
+
+---
+## 1. Overview
+Conquest is an ASP.NET Core API (targeting .NET 9) that manages users, places, activities at places, events, friendships, and reviews. It uses:
+- ASP.NET Core MVC + minimal hosting model
+- Identity (custom `AppUser`) stored in `AuthDbContext` (SQLite)
+- Application domain stored in `AppDbContext` (SQLite)
+- JWT-based authentication
+- Swagger/OpenAPI (exposed at root path `/`)
+
+---
+## 2. Project Structure (Key Folders)
+- `Program.cs` – service registration, middleware pipeline, auto-migrations.
+- `Data/Auth/AuthDbContext.cs` – Identity + Friendships.
+- `Data/App/AppDbContext.cs` – Places, Activities, Reviews, Tags, CheckIns, Events.
+- `Models/*` – EF Core entity classes.
+- `Dtos/*` – Records/classes exposed via API boundary.
+- `Controllers/*` – API endpoints grouped by domain.
+- `Services/*` – Domain logic helpers (Events status, Friends aggregation, Token creation).
+
+---
+## 3. Configuration & Startup (`Program.cs`)
+Registered services:
+- Two DbContexts (`AuthDbContext`, `AppDbContext`) using separate SQLite connection strings: `AuthConnection`, `AppConnection`.
+- IdentityCore for `AppUser` + Roles + SignInManager + TokenProviders.
+- JWT options bound from `configuration["Jwt"]` (Key, Issuer, Audience, AccessTokenMinutes).
+- Scoped services: `ITokenService` (`TokenService`), `IFriendService` (`FriendService`).
+- Authentication: JWT Bearer with validation (issuer, audience, lifetime, signing key).
+- Swagger with Bearer security scheme.
+- Auto migration is performed for both contexts at startup inside a scope.
+
+Pipeline order:
+1. Swagger + UI at root
+2. (Optional HTTPS redirection disabled)
+3. Routing
+4. Authentication
+5. Authorization
+6. Static files
+7. Controller endpoints via `app.MapControllers()`
+
+---
+## 4. Authentication & Authorization
+### Identity
+- `AppUser : IdentityUser` adds: `FirstName`, `LastName`, `ProfileImageUrl`.
+- Unique index on `UserName` enforced in `AuthDbContext`.
+
+### JWT
+- Claims added: `sub`, `email`, `nameidentifier`, `name`, plus each role.
+- Token lifespan: `AccessTokenMinutes` from config (default 60).
+- `AuthResponse` returns: `AccessToken`, `ExpiresUtc`, `User` (`UserDto`).
+
+### Password Flows
+- Register: validates uniqueness of normalized `UserName` manually.
+- Login: email + password; uses `CheckPasswordSignInAsync` with lockout.
+- Forgot Password: generates identity reset token, returns encoded version in DEV.
+- Reset Password: base64url decode then `ResetPasswordAsync`.
+- Change Password: requires existing password & JWT auth.
+
+### Authorization
+- Most controllers require `[Authorize]` at class level (Events, Places, Profiles, Reviews implicitly via needing User ID). Some endpoints explicitly `[AllowAnonymous]` (register/login/forgot/reset).
+
+---
+## 5. Database Contexts
+### AuthDbContext
+DbSets:
+- `Friendships` (composite PK: `{UserId, FriendId}`)
+Relationships:
+- `Friendship.User` and `Friendship.Friend` each `Restrict` delete.
+Indexes:
+- Unique index on `AppUser.UserName`.
+
+### AppDbContext
+DbSets:
+- `Places`, `ActivityKinds`, `PlaceActivities`, `Reviews`, `CheckIns`, `Tags`, `ReviewTags`, `Events`, `EventAttendees`
+
+Seed Data:
+- `ActivityKind` seeded with ids 1–8 (Soccer, Climbing, Tennis, Hiking, Running, Photography, Coffee, Gym).
+
+Indexes:
+- `Place (Latitude, Longitude)` for geo bounding.
+- Unique `ActivityKind.Name`.
+- Unique composite `PlaceActivity (PlaceId, Name)`.
+- Review uniqueness: index on `(PlaceActivityId, UserId)` (permits multiple reviews currently if not constrained by uniqueness—index can be used to enforce business rule externally).
+- Unique `Tag.Name`.
+- Composite PK `ReviewTag (ReviewId, TagId)`.
+- CheckIn index `(PlaceActivityId, CreatedAt)`.
+- Composite PK `EventAttendee (EventId, UserId)`.
+
+Relationships & Cascades:
+- `PlaceActivity` → `Place` cascade delete.
+- `PlaceActivity` → `ActivityKind` restrict delete.
+- `Review` → `PlaceActivity` cascade.
+- `CheckIn` → `PlaceActivity` cascade.
+- `ReviewTag` → `Review` cascade, `ReviewTag` → `Tag` cascade.
+- `EventAttendee` → `Event` cascade.
+
+Property Configuration:
+- `Review.Content` max length 2000 (model class shows 1000 – guide notes difference; EF config wins at runtime).
+- Timestamp defaults via `CURRENT_TIMESTAMP` for `Review.CreatedAt`, `CheckIn.CreatedAt`.
+- `Tag.Name` max 30.
+
+---
+## 6. Domain Models (Summaries)
+| Entity | Key | Core Fields | Navigation | Notes |
+|--------|-----|-------------|-----------|-------|
+| AppUser | `IdentityUser` | FirstName, LastName, ProfileImageUrl | (Friends) | Stored in Auth DB |
+| Friendship | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt | User, Friend | Symmetric friendship stored as two Accepted rows after accept |
+| Place | Id | Name, Address, Latitude, Longitude, OwnerUserId, IsPublic, CreatedUtc | PlaceActivities | OwnerUserId is string (Identity FK) |
+| ActivityKind | Id | Name | PlaceActivities | Seeded |
+| PlaceActivity | Id | PlaceId, ActivityKindId?, Name, Description, CreatedUtc | Place, ActivityKind, Reviews, CheckIns | Unique per place by Name |
+| Review | Id | UserId, UserName, PlaceActivityId, Rating, Content, CreatedAt | PlaceActivity, ReviewTags | Rating int (range rules enforced externally) |
+| Tag | Id | Name (normalized), CanonicalTagId?, IsBanned, IsApproved | ReviewTags | Tag moderation flags |
+| ReviewTag | (ReviewId, TagId) | — | Review, Tag | Join table |
+| CheckIn | Id | UserId, PlaceActivityId, Note, CreatedAt | PlaceActivity | Timestamp default |
+| Event | Id | Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedById, CreatedAt, Latitude, Longitude | Attendees (EventAttendee) | Status computed dynamically |
+| EventAttendee | (EventId, UserId) | JoinedAt | Event | Many-to-many join |
+
+---
+## 7. DTO Contracts
+### Activities
+- `ActivitySummaryDto(Id, Name, ActivityKindId?, ActivityKindName?)`
+- `CreateActivityDto(PlaceId, Name, ActivityKindId?, Description?)`
+- `ActivityDetailsDto(Id, PlaceId, Name, ActivityKindId?, ActivityKindName?, Description?, CreatedUtc)`
+- `ActivityKindDto(Id, Name)` / `CreateActivityKindDto(Name)`
+
+### Auth
+- `RegisterDto(Email, Password, FirstName, LastName, UserName)`
+- `LoginDto(Email, Password)`
+- `ForgotPasswordDto(Email)`
+- `ResetPasswordDto(Email, Token, NewPassword)`
+- `ChangePasswordDto(CurrentPassword, NewPassword)`
+- `UserDto(Id, Email, DisplayName, FirstName, LastName, ProfileImageUrl)`
+- `AuthResponse(AccessToken, ExpiresUtc, User)`
+- `JwtOptions(Key, Issuer, Audience, AccessTokenMinutes)`
+
+### Events
+- `EventDto(Id, Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedBy(UserSummaryDto), CreatedAt, Attendees[List<UserSummaryDto>], Status, Latitude, Longitude)`
+- `UserSummaryDto(Id, UserName, FirstName, LastName)`
+- `CreateEventDto(Title, Description?, IsPublic, StartTime, EndTime, Location, Latitude, Longitude)`
+- `UpdateEventDto` (all optional patch fields)
+
+### Friends
+- `FriendSummaryDto(Id, UserName, FirstName, LastName, ProfileImageUrl?)`
+
+### Places
+- `UpsertPlaceDto(Name, Address, Latitude, Longitude, IsPublic)`
+- `PlaceDetailsDto(Id, Name, Address, Latitude, Longitude, IsPublic, IsOwner, Activities[ActivitySummaryDto], ActivityKinds[string])`
+
+### Profiles
+- `ProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?)`
+- `PersonalProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?, Email)`
+
+### Reviews
+- `ReviewDto(Id, Rating, Content?, UserName, CreatedAt)`
+- `CreateReviewDto(Rating, Content?)`
+- `ExploreReviewDto(ReviewId, PlaceActivityId, PlaceId, PlaceName, PlaceAddress, Latitude, Longitude, Rating, Content?, UserName, CreatedAt)`
+
+---
+## 8. Services
+### TokenService (`ITokenService`)
+Generates JWT using configured options; includes roles and identity claims.
+
+### FriendService (`IFriendService`)
+Returns all accepted friend IDs (both directions) for a user.
+
+### EventsService
+Static `ComputeStatus(Event)` returns: `Upcoming`, `Ongoing`, or `Ended` based on current UTC time vs. Start/End.
+
+---
+## 9. Controllers & Endpoints
+Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body. Auth: A=Requires JWT, An=AllowAnonymous.
+
+### ActivitiesController (`/api/activities`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/activities | A | `CreateActivityDto` | `ActivityDetailsDto` | Validates place, optional kind, uniqueness per place |
+
+### ActivityKindsController (`/api/activity-kinds`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| GET | /api/activity-kinds | A | — | `ActivityKindDto[]` | Ordered by Name |
+| POST | /api/activity-kinds | A | `CreateActivityKindDto` | `ActivityKindDto` | Enforces unique name (case-insensitive) |
+| DELETE | /api/activity-kinds/{id} | A | — | 204 NoContent | Remove kind (restrict prevents cascade on activities) |
+
+### AuthController (`/api/auth`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/auth/register | An | `RegisterDto` | `AuthResponse` | Username uniqueness manual check |
+| POST | /api/auth/login | An | `LoginDto` | `AuthResponse` | Lockout on failures (Identity configured) |
+| GET | /api/auth/me | A | — | `UserDto` | Uses `ClaimTypes.NameIdentifier` |
+| POST | /api/auth/password/forgot | An | `ForgotPasswordDto` | Dev returns token | Avoids enumeration |
+| POST | /api/auth/password/reset | An | `ResetPasswordDto` | 200 status | Decodes base64url token |
+| POST | /api/auth/password/change | A | `ChangePasswordDto` | 200 status | Validates current password |
+
+### EventsController (`/api/Events`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/Events/create | A | `CreateEventDto` | `EventDto` | Validates times (future, duration ≥15m) |
+| GET | /api/Events/{id} | A | — | `EventDto` | Loads attendees + creator |
+| GET | /api/Events/mine | A | — | `EventDto[]` | Events created by requester |
+| GET | /api/Events/attending | A | — | `EventDto[]` | Where user is attendee |
+| POST | /api/Events/{id}/attend | A | — | 200 | Prevents attending own event & duplicates |
+| POST | /api/Events/{id}/leave | A | — | 200 | Removes attendee row |
+| DELETE | /api/Events/{id} | A | — | 200 | Only creator |
+| PATCH | /api/Events/{id} | A | `UpdateEventDto` | 200 | Partial updates |
+| GET | /api/Events/public (Q: from,to,lat,lng,radiusKm) | A | — | `EventDto[]` | Bounding box geo filter + upcoming only |
+
+### FriendsController (`/api/Friends`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| GET | /api/Friends/friends | A | — | `FriendSummaryDto[]` | Accepted friendships only |
+| POST | /api/Friends/add/{username} | A | — | 200 | Creates Pending request if no existing relations |
+| POST | /api/Friends/accept/{username} | A | — | 200 | Converts Pending to Accepted + adds reverse Accepted row |
+| POST | /api/Friends/requests/incoming | A | — | `FriendSummaryDto[]` | Pending where current user is FriendId |
+| POST | /api/Friends/remove/{username} | A | — | 200 | Deletes both Accepted rows |
+
+### PlacesController (`/api/places`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/places | A | `UpsertPlaceDto` | `PlaceDetailsDto` | Daily per-user creation limit (10) |
+| GET | /api/places/{id} | A | — | `PlaceDetailsDto` | Hides private non-owned places |
+| GET | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind) | A | — | `PlaceDetailsDto[]` | Bounding box + optional activity filters |
+
+### ProfilesController (`/api/profiles`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| GET | /api/profiles/me | A | — | `PersonalProfileDto` | Current user profile |
+| GET | /api/profiles/search?username= | A | — | `ProfileDto[]` | Prefix search on normalized username; excludes self |
+
+### ReviewsController (`/api/activities/{placeActivityId}/reviews`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/activities/{placeActivityId}/reviews | A | `CreateReviewDto` | `ReviewDto` | Multiple reviews allowed (no uniqueness constraint enforced) |
+| GET | /api/activities/{placeActivityId}/reviews?scope=mine|friends|global | A | — | `ReviewDto[]` | Filters by ownership/friends via FriendService |
+
+---
+## 10. Validation & Business Rules (Highlights)
+- Activity creation enforces unique (PlaceId, Name) and optional kind existence.
+- Place creation daily rate limit (10 per user per UTC day).
+- Event creation rules: future start (±5 min grace), end after start, minimum 15 minutes duration, non-empty Title/Location.
+- Friend requests prevent duplicates, self-addition, blocked status, and existing outgoing/incoming collisions.
+- Review scopes: `friends` uses accepted friendships from `FriendService`.
+- Password flows do not leak account existence (uniform responses for missing users).
+
+---
+## 11. Indexes, Seed Data, Performance Notes
+- Geospatial queries use bounding box (approximate) before distance calculation (Haversine) filtered by radius.
+- Suggest future optimization: create a covering index on `(Latitude, Longitude, IsPublic)` if query frequency increases.
+- Event attendee queries currently perform per-event user lookups; could batch via join for performance if needed.
+
+---
+## 12. Migration & EF Core Operations
+### Auto Migrations
+`Program.cs` executes `Database.Migrate()` for both contexts at startup.
+
+### Manual Commands
+Use full context type when generating migrations:
+```bash
+dotnet ef migrations add <MigrationName> --context Conquest.Data.Auth.AuthDbContext
+dotnet ef database update --context Conquest.Data.Auth.AuthDbContext
+
+dotnet ef migrations add <MigrationName> --context Conquest.Data.App.AppDbContext
+dotnet ef database update --context Conquest.Data.App.AppDbContext
+```
+
+### Legacy Note (From Original UserGuide.md)
+Pending model changes warning indicates migrations not generated. Resolve by adding and updating the relevant context as above.
+
+---
+## 13. Conventions & Extension Points
+- Controllers use explicit route prefixes instead of `[Route("api/[controller]")]` in some cases for clarity (`ActivitiesController`: `api/activities`).
+- DTOs use C# 9+ records for immutability; patch DTOs use nullable reference types.
+- Service extension points: Add domain logic (e.g., tagging, moderation) via new scoped services injected into controllers.
+- For geospatial improvements: consider EF Core function mapping to SQLite extensions or moving to PostGIS if precision/radius queries intensify.
+- Status computation for Events kept in service; consider background job to denormalize if queries scale.
+
+---
+## 14. Quick Reference Summary
+| Layer | Items |
+|-------|-------|
+| Auth | Register, Login, Me, Password flows |
+| Places | Create, GetById, Nearby search |
+| Activities | Create activity, CRUD kinds |
+| Events | Create, View, Manage attendance, Public search |
+| Friends | Add, Accept, List, Incoming, Remove |
+| Profiles | Me, Search |
+| Reviews | Create, List by scope |
+
+---
+## 15. Suggested Future Enhancements
+- Add pagination to large list endpoints (Events public, Nearby Places, Reviews).
+- Normalize and validate rating range (e.g., 1–5) at entity or DTO layer.
+- Add soft delete for Places and Activities to preserve historical reviews.
+- Consolidate multiple per-event attendee user lookups into single batched query.
+- Implement email service for password reset in production.
+
+---
+## 16. Agent Usage Notes
+When generating or modifying code:
+- Respect existing route and DTO contracts documented above.
+- Validate business rules listed in Section 10 for new features.
+- When adding new models: update the corresponding DbContext, create migration, and extend this guide.
+- Keep new endpoints consistent with the route naming: plural nouns, kebab-case only when explicitly needed.
+
+---
+End of guide.
