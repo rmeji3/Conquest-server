@@ -1,9 +1,10 @@
 {
     "version": "0.2.0",
     "configurations": [
+        
         {
             "name": ".NET Core Launch (web)",
-            "type": "coreclr",
+            "type": "dotnet",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/bin/Debug/net9.0/Conquest-server.dll",
@@ -23,7 +24,7 @@
         },
         {
             "name": ".NET Core Attach",
-            "type": "coreclr",
+            "type": "dotnet",
             "request": "attach"
         }
     ]

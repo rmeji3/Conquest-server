@@ -5,6 +5,12 @@ using Conquest.Dtos.Auth;
 using Conquest.Features.Auth;
 using Conquest.Models.AppUsers;
 using Conquest.Services.Friends;
+using Conquest.Services.Places;
+using Conquest.Services.Events;
+using Conquest.Services.Reviews;
+using Conquest.Services.Activities;
+using Conquest.Services.Profiles;
+using Conquest.Services.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -40,8 +46,14 @@ var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
 // --- Token service ---
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-// --- Friends Service ---
+// --- Services ---
 builder.Services.AddScoped<IFriendService, FriendService>();
+builder.Services.AddScoped<IPlaceService, PlaceService>();
+builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IActivityService, ActivityService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // --- JWT Auth ---
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -64,6 +76,7 @@ builder.Services.AddAuthorization();
 // --- Controllers + Swagger ---
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddTransient<Conquest.Middleware.GlobalExceptionHandler>();
 builder.Services.AddSwaggerGen(o =>
 {
     o.SwaggerDoc("v1", new OpenApiInfo { Title = "Conquest API", Version = "v1" });
@@ -95,7 +108,9 @@ using (var scope = app.Services.CreateScope())
     appDb.Database.Migrate();
 }
 
+
 // --- Middleware ---
+app.UseMiddleware<Conquest.Middleware.GlobalExceptionHandler>();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -109,6 +124,8 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseStaticFiles();
+
+
 
 app.MapControllers();
 

@@ -19,8 +19,8 @@ public record EventDto(
 public record UserSummaryDto(
     string Id,
     string UserName,
-    string FirstName,
-    string LastName
+    string? FirstName,
+    string? LastName
 );
 
 public record CreateEventDto(

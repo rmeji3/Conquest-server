@@ -1,17 +1,15 @@
 using System.Security.Claims;
 using Conquest.Dtos.Profiles;
-using Conquest.Models.AppUsers;
+using Conquest.Services.Profiles;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Conquest.Controllers.Profiles;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ProfilesController(UserManager<AppUser> userManager) : ControllerBase
+public class ProfilesController(IProfileService profileService) : ControllerBase
 {
     // GET /api/profiles/me
     [HttpGet("me")]
@@ -20,46 +18,32 @@ public class ProfilesController(UserManager<AppUser> userManager) : ControllerBa
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) return Unauthorized();
 
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null) return Unauthorized();
-
-        var profile = new PersonalProfileDto(
-            user.Id,
-            user.UserName!,           // ensure not null
-            user.FirstName,
-            user.LastName,
-            user.ProfileImageUrl,
-            user.Email!
-        );
-        
-        return Ok(profile);
+        try
+        {
+            var profile = await profileService.GetMyProfileAsync(userId);
+            return Ok(profile);
+        }
+        catch (KeyNotFoundException)
+        {
+            return Unauthorized();
+        }
     }
     
     // GET /api/profiles/search?username=someUsername
     [HttpGet("search")]
     public async Task<ActionResult<List<ProfileDto>>> Search([FromQuery] string username)
     {
-        if (string.IsNullOrWhiteSpace(username))
-            return BadRequest("Username query parameter is required.");
-
-        var normalized = username.ToUpper(); // match Identity normalization
-        
         var yourUsername = User.FindFirstValue(ClaimTypes.Name);
+        if (yourUsername is null) return Unauthorized();
 
-        var users = await userManager.Users
-            .Where(u => u.NormalizedUserName!.StartsWith(normalized)
-            && u.NormalizedUserName != yourUsername!.ToUpper()) // exclude yourself
-            .OrderBy(u => u.UserName)
-            .Take(15)
-            .Select(u => new ProfileDto(
-                u.Id,
-                u.UserName!,
-                u.FirstName,
-                u.LastName,
-                u.ProfileImageUrl
-            ))
-            .ToListAsync();
-
-        return Ok(users);
+        try
+        {
+            var users = await profileService.SearchProfilesAsync(username, yourUsername);
+            return Ok(users);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }

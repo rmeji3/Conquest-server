@@ -24,3 +24,21 @@ These are the commands without names so you can replace the names with your own 
 dotnet ef migrations add <MigrationName> --context <YourDbContext>
 dotnet ef database update --context <YourDbContext>
 ```
+
+## Troubleshooting Network Issues (Expo Go)
+
+If you see `Network request failed` on your mobile device, it is likely the **Windows Firewall** blocking the connection.
+
+### How to fix Firewall
+1.  Open **Windows Defender Firewall with Advanced Security**.
+2.  Click **Inbound Rules** -> **New Rule...**.
+3.  Select **Port** -> **Next**.
+4.  Select **TCP** and enter **5055** in **Specific local ports** -> **Next**.
+5.  Select **Allow the connection** -> **Next**.
+6.  Check all profiles (Domain, Private, Public) -> **Next**.
+7.  Name it "Conquest API" -> **Finish**.
+
+Alternatively, run this command in an **Administrator** PowerShell:
+```powershell
+New-NetFirewallRule -DisplayName "Conquest API" -Direction Inbound -LocalPort 5055 -Protocol TCP -Action Allow
+```

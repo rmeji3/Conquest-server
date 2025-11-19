@@ -24,6 +24,7 @@ Conquest is an ASP.NET Core API (targeting .NET 9) that manages users, places, a
 - Identity (custom `AppUser`) stored in `AuthDbContext` (SQLite)
 - Application domain stored in `AppDbContext` (SQLite)
 - JWT-based authentication
+- Global Exception Handling (standardized JSON responses)
 - Swagger/OpenAPI (exposed at root path `/`)
 
 ---
@@ -259,12 +260,13 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 - Friend requests prevent duplicates, self-addition, blocked status, and existing outgoing/incoming collisions.
 - Review scopes: `friends` uses accepted friendships from `FriendService`.
 - Password flows do not leak account existence (uniform responses for missing users).
+- **Global Exception Handling**: Unhandled exceptions return a standardized `500 Internal Server Error` JSON response (`ProblemDetails`).
 
 ---
 ## 11. Indexes, Seed Data, Performance Notes
 - Geospatial queries use bounding box (approximate) before distance calculation (Haversine) filtered by radius.
 - Suggest future optimization: create a covering index on `(Latitude, Longitude, IsPublic)` if query frequency increases.
-- Event attendee queries currently perform per-event user lookups; could batch via join for performance if needed.
+- Event attendee queries are batched (N+1 fixed) in `EventsController` to reduce database round-trips.
 
 ---
 ## 12. Migration & EF Core Operations

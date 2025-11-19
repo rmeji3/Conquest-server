@@ -5,6 +5,8 @@ These instructions guide automated code assistance in this repository.
 ## Primary Context Source
 - Use `ServerGuide.md` for the authoritative description of architecture, endpoints, models, DTOs, services, and rules.
 - After making ANY change to endpoints, models, DTOs, services, database schema, or business rules: UPDATE `ServerGuide.md` in the relevant section.
+- Try to use industry/production standard design.
+- Explain if there is a better way to approach code rather than fixing what is given. (Libraries, etc.)
 
 ## Coding Standards
 - Language: C# (.NET 9). Follow idiomatic modern C#.
@@ -23,6 +25,7 @@ These instructions guide automated code assistance in this repository.
 - Asynchrony: Use `async/await` and `Task` everywhere for EF/database calls; no `.Result` or `.Wait()`.
 - Error Responses: Use consistent HTTP status codes (400 validation, 401/403 auth, 404 not found, 409 conflict).
 - Collections: Prefer `List<T>` for mutable lists; return arrays (`T[]`) or immutable collections when exposed publicly.
+- Add comments to explain some code
 
 ## Controller Conventions
 - Route prefix: `api/<resource>`; avoid mixing pluralization styles.

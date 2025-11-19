@@ -1,37 +1,22 @@
-﻿using Conquest.Models.AppUsers;
+﻿using Conquest.Dtos.Friends;
+using Conquest.Services.Friends;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Conquest.Models.Friends;
-using Conquest.Dtos.Friends;
-using Conquest.Data.Auth;
+using System.Security.Claims;
 
 namespace Conquest.Controllers
 {
     [Route("api/[controller]")]
-    public class FriendsController(AuthDbContext appContext, UserManager<AppUser> userManager) : ControllerBase
+    public class FriendsController(IFriendService friendService) : ControllerBase
     {
         [Authorize]
         [HttpGet("friends")]
         public async Task<IActionResult> GetMyFriends()
         {
-            var me = await userManager.GetUserAsync(User);
-            if (me is null) return Unauthorized();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
 
-            var friends = await appContext.Friendships
-                .Where(f => f.UserId == me.Id && f.Status == Friendship.FriendshipStatus.Accepted)
-                .Select(f => new FriendSummaryDto
-                {
-                    Id = f.Friend.Id,
-                    UserName = f.Friend.UserName!,     // choose only what you want exposed
-                    FirstName = f.Friend.FirstName,
-                    LastName = f.Friend.LastName,
-                    ProfileImageUrl = f.Friend.ProfileImageUrl
-                    
-                })
-                .ToListAsync();
-
+            var friends = await friendService.GetMyFriendsAsync(userId);
             return Ok(friends);
         }
 
@@ -39,133 +24,54 @@ namespace Conquest.Controllers
         [HttpPost("add/{username}")]
         public async Task<IActionResult> AddFriend(string username)
         {
-            var me = await userManager.GetUserAsync(User);
-            if (me is null) return Unauthorized();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
 
-            var friend = await userManager.FindByNameAsync(username);
-
-            if (friend is null) return NotFound("User not found.");
-
-            // can't add yourself
-            if (friend.Id == me.Id) return BadRequest("You cannot add yourself as a friend.");
-
-            var userId = me.Id;
-            var friendId = friend.Id;
-
-            // if we already have any Accepted link either direction, they're friends
-            var alreadyFriends = await appContext.Friendships.AnyAsync(f =>
-                ((f.UserId == userId && f.FriendId == friendId) ||
-                 (f.UserId == friendId && f.FriendId == userId)) &&
-                f.Status == Friendship.FriendshipStatus.Accepted);
-
-            if (alreadyFriends) return Conflict("Already friends.");
-
-            // did I already send a pending request to them?
-            var existingOutgoing = await appContext.Friendships.FirstOrDefaultAsync(f =>
-                f.UserId == userId &&
-                f.FriendId == friendId &&
-                f.Status == Friendship.FriendshipStatus.Pending);
-
-            if (existingOutgoing is not null)
-                return BadRequest("You already sent a friend request to this user.");
-
-            // did THEY already send a pending request to ME?
-            var existingIncoming = await appContext.Friendships.FirstOrDefaultAsync(f =>
-                f.UserId == friendId &&
-                f.FriendId == userId &&
-                f.Status == Friendship.FriendshipStatus.Pending);
-
-            if (existingIncoming is not null)
-                return BadRequest("This user already sent you a request. Accept it instead.");
-
-            // have they blocked me?
-            var blocked = await appContext.Friendships.FirstOrDefaultAsync(f =>
-                f.UserId == friendId &&
-                f.FriendId == userId &&
-                f.Status == Friendship.FriendshipStatus.Blocked);
-
-            if (blocked is not null)
-                return BadRequest("This user has blocked you. You cannot send a request.");
-
-            // create a new pending request (one row: me -> friend)
-            var friendship = new Friendship
+            try
             {
-                UserId = userId,
-                FriendId = friendId,
-                Status = Friendship.FriendshipStatus.Pending,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            appContext.Friendships.Add(friendship);
-            await appContext.SaveChangesAsync();
-
-            return Ok("Friend request sent!");
+                var result = await friendService.AddFriendAsync(userId, username);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [Authorize]
         [HttpPost("accept/{username}")]
         public async Task<IActionResult> AcceptFriend(string username)
         {
-            var me = await userManager.GetUserAsync(User);
-            if (me is null) { return Unauthorized(); }
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
 
-            var friend = await userManager.FindByNameAsync(username);
-            if (friend is null) { return NotFound("User not found."); }
-
-            var userId = me.Id;
-            var friendId = friend.Id;
-
-            // find pending request sent by THEM to ME
-            var pendingRequest = await appContext.Friendships
-                .FirstOrDefaultAsync(f =>
-                    f.UserId == friendId &&
-                    f.FriendId == userId &&
-                    f.Status == Friendship.FriendshipStatus.Pending);
-
-            if (pendingRequest is null)
-                return BadRequest("No pending request from this user.");
-
-            // update the request to Accepted
-            pendingRequest.Status = Friendship.FriendshipStatus.Accepted;
-
-            // also add reverse link if it does not exist yet
-            var reverseExists = await appContext.Friendships.AnyAsync(f =>
-                f.UserId == userId &&
-                f.FriendId == friendId &&
-                f.Status == Friendship.FriendshipStatus.Accepted);
-
-            if (!reverseExists)
+            try
             {
-                appContext.Friendships.Add(new Friendship
-                {
-                    UserId = userId,
-                    FriendId = friendId,
-                    Status = Friendship.FriendshipStatus.Accepted,
-                    CreatedAt = DateTime.UtcNow
-                });
+                var result = await friendService.AcceptFriendAsync(userId, username);
+                return Ok(result);
             }
-
-            await appContext.SaveChangesAsync();
-
-            return Ok("Friend request accepted.");
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [Authorize]
         [HttpPost("requests/incoming")]
         public async Task<IActionResult> GetIncomingRequests()
         {
-            var me = await userManager.GetUserAsync(User);
-            if (me is null) return Unauthorized();
-            var requests = await appContext.Friendships
-                .Where(f => f.FriendId == me.Id && f.Status == Friendship.FriendshipStatus.Pending)
-                .Select(f => new FriendSummaryDto
-                {
-                    Id = f.User.Id,
-                    UserName = f.User.UserName!,
-                    FirstName = f.User.FirstName,
-                    LastName = f.User.LastName
-                })
-                .ToListAsync();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            var requests = await friendService.GetIncomingRequestsAsync(userId);
             return Ok(requests);
         }
 
@@ -173,24 +79,22 @@ namespace Conquest.Controllers
         [HttpPost("remove/{username}")]
         public async Task<IActionResult> RemoveFriend(string username)
         {
-            var me = await userManager.GetUserAsync(User);
-            if (me is null) return Unauthorized();
-            var friend = await userManager.FindByNameAsync(username);
-            if (friend is null) return NotFound("User not found.");
-            var userId = me.Id;
-            var friendId = friend.Id;
-            var friendship1 = await appContext.Friendships
-                .FirstOrDefaultAsync(f => f.UserId == userId && f.FriendId == friendId && f.Status == Friendship.FriendshipStatus.Accepted);
-            var friendship2 = await appContext.Friendships
-                .FirstOrDefaultAsync(f => f.UserId == friendId && f.FriendId == userId && f.Status == Friendship.FriendshipStatus.Accepted);
-            if (friendship1 is null && friendship2 is null)
-                return BadRequest("You are not friends with this user.");
-            if (friendship1 is not null)
-                appContext.Friendships.Remove(friendship1);
-            if (friendship2 is not null)
-                appContext.Friendships.Remove(friendship2);
-            await appContext.SaveChangesAsync();
-            return Ok("Friend removed.");
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            try
+            {
+                var result = await friendService.RemoveFriendAsync(userId, username);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }
