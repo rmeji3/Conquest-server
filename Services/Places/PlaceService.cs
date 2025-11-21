@@ -2,6 +2,9 @@ using Conquest.Data.App;
 using Conquest.Dtos.Activities;
 using Conquest.Dtos.Places;
 using Conquest.Models.Places;
+using Conquest.Models.Reviews;
+using Conquest.Services.Friends;
+using Conquest.Services.Google;
 using Conquest.Services.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -9,9 +12,11 @@ using Microsoft.Extensions.Logging;
 namespace Conquest.Services.Places;
 
 public class PlaceService(
-    AppDbContext db, 
+    AppDbContext db,
     IRedisService redis,
-    IConfiguration configuration,
+    IConfiguration config,
+    IPlaceNameService placeNameService,
+    IFriendService friendService,
     ILogger<PlaceService> logger) : IPlaceService
 {
     public async Task<PlaceDetailsDto> CreatePlaceAsync(UpsertPlaceDto dto, string userId)
@@ -19,7 +24,7 @@ public class PlaceService(
         // Redis-based daily rate limit per user
         var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
         var rateLimitKey = $"ratelimit:place:create:{userId}:{today}";
-        var limit = configuration.GetValue<int>("RateLimiting:PlaceCreationLimitPerDay", 10);
+        var limit = config.GetValue<int>("RateLimiting:PlaceCreationLimitPerDay", 10);
 
         // Increment counter with 24-hour expiry
         var createdToday = await redis.IncrementAsync(rateLimitKey, TimeSpan.FromHours(24));
@@ -30,35 +35,106 @@ public class PlaceService(
             throw new InvalidOperationException("You've reached the daily limit for adding places.");
         }
 
+        // RULE: Private/Friends places can only be Custom (not Verified)
+        // Verified places are only for Public places to avoid unnecessary Google API calls
+        if (dto.Visibility != PlaceVisibility.Public && dto.Type == PlaceType.Verified)
+        {
+            logger.LogWarning("Verified type is only allowed for Public places. Auto-correcting to Custom for {Visibility} place.", dto.Visibility);
+            dto = dto with { Type = PlaceType.Custom };
+        }
+
+        // Logic:
+        // 1. If Visibility is Public -> Check for existing Public place based on Type
+        //    - Verified: Check by ADDRESS only (no coordinate check)
+        //    - Custom: Check by COORDINATES only (~50m tolerance)
+        // 2. If Visibility is Private/Friends -> Always create new (Allow duplicates)
+
+        var finalName = dto.Name.Trim();
+
+        if (dto.Visibility == PlaceVisibility.Public)
+        {
+            if (dto.Type == PlaceType.Verified)
+            {
+                // VERIFIED PLACE: Requires address, check by address ONLY
+                if (string.IsNullOrWhiteSpace(dto.Address))
+                {
+                    logger.LogError("Verified place creation failed: Address is required for verified places.");
+                    throw new InvalidOperationException("Verified places require an address.");
+                }
+
+                // Duplicate check: BY ADDRESS ONLY (no coordinate checking)
+                var existingByAddress = await db.Places
+                    .Where(p => p.Visibility == PlaceVisibility.Public &&
+                                p.Type == PlaceType.Verified &&
+                                p.Address == dto.Address.Trim())
+                    .FirstOrDefaultAsync();
+
+                if (existingByAddress != null)
+                {
+                    logger.LogInformation("Verified place already exists with address '{Address}'. Returning existing place {PlaceId}.", dto.Address, existingByAddress.Id);
+                    return await ToPlaceDetailsDto(existingByAddress, userId);
+                }
+
+                // Fetch Google name for verified places
+                logger.LogInformation("Verified place detected. Calling Google Places API for coordinates {Lat}, {Lng}", dto.Latitude, dto.Longitude);
+                var googleName = await placeNameService.GetPlaceNameAsync(dto.Latitude, dto.Longitude);
+                
+                if (!string.IsNullOrWhiteSpace(googleName))
+                {
+                    logger.LogInformation("Using Google Places name: '{GoogleName}' for verified place.", googleName);
+                    finalName = googleName;
+                }
+                else
+                {
+                    logger.LogInformation("Google Places returned no name. Using user-provided name: '{UserName}'", finalName);
+                }
+            }
+            else // PlaceType.Custom
+            {
+                // CUSTOM PLACE: Coordinates-based, wider tolerance (~50m)
+                // Duplicate check: BY COORDINATES ONLY
+                // 0.0005 degrees ~= 50-55 meters
+                var existingCustom = await db.Places
+                    .Where(p => p.Visibility == PlaceVisibility.Public &&
+                                p.Type == PlaceType.Custom &&
+                                Math.Abs(p.Latitude - dto.Latitude) < 0.0005 &&
+                                Math.Abs(p.Longitude - dto.Longitude) < 0.0005)
+                    .FirstOrDefaultAsync();
+
+                if (existingCustom != null)
+                {
+                    logger.LogInformation("Custom place already exists within 50m at coordinates {Lat}, {Lng}. Returning existing place {PlaceId}.", dto.Latitude, dto.Longitude, existingCustom.Id);
+                    return await ToPlaceDetailsDto(existingCustom, userId);
+                }
+
+                // Use user-provided name for custom places (no Google API call)
+                logger.LogInformation("Custom place created with user-provided name: '{UserName}'", finalName);
+            }
+        }
+        else
+        {
+            logger.LogInformation("Non-public place (Visibility: {Visibility}). Skipping duplicate checks. Using user name: '{UserName}'", dto.Visibility, finalName);
+        }
+
         var place = new Place
         {
-            Name = dto.Name.Trim(),
-            Address = dto.Address.Trim(),
+            Name = finalName,
+            Address = dto.Address?.Trim() ?? string.Empty,
             Latitude = dto.Latitude,
             Longitude = dto.Longitude,
             OwnerUserId = userId,
-            IsPublic = dto.IsPublic,
+            Visibility = dto.Visibility,
+            Type = dto.Type,
             CreatedUtc = DateTime.UtcNow
         };
 
         db.Places.Add(place);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Place created: {PlaceId} by {UserId}. Daily count: {Count}/{Limit}", 
-            place.Id, userId, createdToday, limit);
+        logger.LogInformation("Place created: {PlaceId} by {UserId}. Visibility: {Visibility}. Daily count: {Count}/{Limit}", 
+            place.Id, userId, dto.Visibility, createdToday, limit);
 
-        return new PlaceDetailsDto(
-            place.Id,
-            place.Name,
-            place.Address ?? string.Empty,
-            place.Latitude,
-            place.Longitude,
-            place.IsPublic,
-            IsOwner: true,
-            IsFavorited: false,
-            Activities: Array.Empty<ActivitySummaryDto>(),
-            ActivityKinds: Array.Empty<string>()
-        );
+        return await ToPlaceDetailsDto(place, userId);
     }
 
     public async Task<PlaceDetailsDto?> GetPlaceByIdAsync(int id, string? userId)
@@ -73,46 +149,31 @@ public class PlaceService(
 
         var isOwner = userId != null && p.OwnerUserId == userId;
 
-        // Hide private places from non-owners
-        if (!p.IsPublic && !isOwner)
-            return null;
+        // Visibility Check
+        if (!isOwner)
+        {
+            if (p.Visibility == PlaceVisibility.Private)
+                return null; // Private places only visible to owner
 
-        // Check if favorited by current user
-        var isFavorited = userId != null && await db.Favorited
-            .AnyAsync(f => f.UserId == userId && f.PlaceId == id);
+            if (p.Visibility == PlaceVisibility.Friends && userId != null)
+            {
+                // Check if friend
+                var friendIds = await friendService.GetFriendIdsAsync(userId);
+                var isFriend = friendIds.Contains(p.OwnerUserId);
+                if (!isFriend) return null;
+            }
+            else if (p.Visibility == PlaceVisibility.Friends && userId == null)
+            {
+                return null; // Anonymous users can't see Friends-only places
+            }
+        }
 
-        var activities = p.PlaceActivities
-            .Select(a => new ActivitySummaryDto(
-                a.Id,
-                a.Name,
-                a.ActivityKindId,
-                a.ActivityKind?.Name
-            ))
-            .ToArray();
-
-        var activityKindNames = p.PlaceActivities
-            .Where(a => a.ActivityKind != null)
-            .Select(a => a.ActivityKind!.Name)
-            .Distinct()
-            .ToArray();
-
-        return new PlaceDetailsDto(
-            p.Id,
-            p.Name,
-            p.Address ?? string.Empty,
-            p.Latitude,
-            p.Longitude,
-            p.IsPublic,
-            isOwner,
-            isFavorited,
-            activities,
-            activityKindNames
-        );
+        return await ToPlaceDetailsDto(p, userId);
     }
 
-    public async Task<IEnumerable<PlaceDetailsDto>> SearchNearbyAsync(double lat, double lng, double radiusKm, string? activityName, string? activityKind, string? userId)
+    public async Task<IEnumerable<PlaceDetailsDto>> SearchNearbyAsync(double lat, double lng, double radiusKm, string? activityName, string? activityKind, PlaceVisibility? visibility, PlaceType? type, string? userId)
     {
-        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}", lat, lng, radiusKm);
+        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}, vis={Vis}, type={Type}", lat, lng, radiusKm, visibility, type);
 
         var latDelta = radiusKm / 111.0;
         var lngDelta = radiusKm / (111.0 * Math.Cos(lat * Math.PI / 180.0));
@@ -124,98 +185,135 @@ public class PlaceService(
         var q = db.Places
             .Where(p => p.Latitude >= minLat && p.Latitude <= maxLat &&
                         p.Longitude >= minLng && p.Longitude <= maxLng)
-            .Where(p => p.IsPublic || (userId != null && p.OwnerUserId == userId))
             .AsNoTracking()
             .Include(p => p.PlaceActivities)
                 .ThenInclude(pa => pa.ActivityKind)
             .AsQueryable();
 
-        // Filter by ACTIVITY NAME (PlaceActivity.Name)
+        // Filter by Visibility
+        if (visibility.HasValue)
+        {
+            q = q.Where(p => p.Visibility == visibility.Value);
+        }
+
+        // Filter by PlaceType
+        if (type.HasValue)
+        {
+            q = q.Where(p => p.Type == type.Value);
+        }
+
+        // Filter by ACTIVITY NAME
         if (!string.IsNullOrWhiteSpace(activityName))
         {
             var an = activityName.Trim().ToLowerInvariant();
-            q = q.Where(p =>
-                p.PlaceActivities.Any(a =>
-                    a.Name.ToLower() == an));
+            q = q.Where(p => p.PlaceActivities.Any(a => a.Name.ToLower() == an));
         }
 
-        // Filter by ACTIVITY KIND (ActivityKind.Name)
+        // Filter by ACTIVITY KIND
         if (!string.IsNullOrWhiteSpace(activityKind))
         {
             var ak = activityKind.Trim().ToLowerInvariant();
-            q = q.Where(p =>
-                p.PlaceActivities.Any(a =>
-                    a.ActivityKind != null &&
-                    a.ActivityKind.Name.ToLower() == ak));
+            q = q.Where(p => p.PlaceActivities.Any(a => a.ActivityKind != null && a.ActivityKind.Name.ToLower() == ak));
         }
 
-        var list = await q
-            .Select(p => new
-            {
-                p,
-                DistanceKm = 6371.0 * 2.0 * Math.Asin(
-                    Math.Sqrt(
-                        Math.Pow(Math.Sin((p.Latitude - lat) * Math.PI / 180.0 / 2.0), 2) +
-                        Math.Cos(lat * Math.PI / 180.0) * Math.Cos(p.Latitude * Math.PI / 180.0) *
-                        Math.Pow(Math.Sin((p.Longitude - lng) * Math.PI / 180.0 / 2.0), 2)
-                    )
-                )
-            })
-            .Where(x => x.DistanceKm <= radiusKm)
-            .OrderBy(x => x.DistanceKm)
-            .Take(100)
-            .ToListAsync();
+        var candidates = await q.ToListAsync();
 
-        // Batch check which places are favorited by the current user
-        var placeIds = list.Select(x => x.p.Id).ToList();
-        var favoritedPlaceIds = new HashSet<int>();
-        
+        // Get Friend List if needed
+        var friendIds = new HashSet<string>();
         if (userId != null)
         {
-            favoritedPlaceIds = await db.Favorited
-                .Where(f => f.UserId == userId && placeIds.Contains(f.PlaceId))
-                .Select(f => f.PlaceId)
-                .ToHashSetAsync();
+            var ids = await friendService.GetFriendIdsAsync(userId);
+            friendIds = ids.ToHashSet();
         }
 
-        return list.Select(x =>
+        var results = new List<PlaceDetailsDto>();
+
+        foreach (var p in candidates)
         {
-            var activityKindNames = x.p.PlaceActivities
-                .Where(a => a.ActivityKind != null)
-                .Select(a => a.ActivityKind!.Name)
-                .Distinct()
-                .ToArray();
-
-            var isOwner = userId != null && x.p.OwnerUserId == userId;
-            var isFavorited = favoritedPlaceIds.Contains(x.p.Id);
-
-            var activities = x.p.PlaceActivities
-                .Select(a => new ActivitySummaryDto(
-                    a.Id,
-                    a.Name,
-                    a.ActivityKindId,
-                    a.ActivityKind?.Name
-                ))
-                .ToArray();
+            var isOwner = userId != null && p.OwnerUserId == userId;
             
-            return new PlaceDetailsDto(
-                x.p.Id,
-                x.p.Name,
-                x.p.Address ?? string.Empty,
-                x.p.Latitude,
-                x.p.Longitude,
-                x.p.IsPublic,
-                isOwner,
-                isFavorited,
-                activities,
-                activityKindNames
+            // Visibility Check
+            bool isVisible = false;
+
+            if (isOwner)
+            {
+                isVisible = true;
+            }
+            else
+            {
+                switch (p.Visibility)
+                {
+                    case PlaceVisibility.Public:
+                        isVisible = true;
+                        break;
+                    case PlaceVisibility.Private:
+                        isVisible = false;
+                        break;
+                    case PlaceVisibility.Friends:
+                        isVisible = userId != null && friendIds.Contains(p.OwnerUserId);
+                        break;
+                }
+            }
+
+            if (!isVisible) continue;
+
+            // Distance Calc
+            var dist = 6371.0 * 2.0 * Math.Asin(
+                Math.Sqrt(
+                    Math.Pow(Math.Sin((p.Latitude - lat) * Math.PI / 180.0 / 2.0), 2) +
+                    Math.Cos(lat * Math.PI / 180.0) * Math.Cos(p.Latitude * Math.PI / 180.0) *
+                    Math.Pow(Math.Sin((p.Longitude - lng) * Math.PI / 180.0 / 2.0), 2)
+                )
             );
-        }).ToList();
+
+            if (dist <= radiusKm)
+            {
+                results.Add(await ToPlaceDetailsDto(p, userId));
+            }
+        }
+
+        return results.OrderBy(x => x.Name).ToList();
+    }
+
+    public async Task<IEnumerable<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId)
+    {
+        var favorites = await db.Favorited
+            .Where(f => f.UserId == userId)
+            .Include(f => f.Place)
+                .ThenInclude(p => p.PlaceActivities)
+                    .ThenInclude(pa => pa.ActivityKind)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var list = new List<PlaceDetailsDto>();
+        foreach (var f in favorites)
+        {
+            var p = f.Place;
+            var isOwner = p.OwnerUserId == userId;
+            bool isVisible = false;
+
+            if (isOwner || p.Visibility == PlaceVisibility.Public)
+            {
+                isVisible = true;
+            }
+            else if (p.Visibility == PlaceVisibility.Friends)
+            {
+                var friendIds = await friendService.GetFriendIdsAsync(userId);
+                var isFriend = friendIds.Contains(p.OwnerUserId);
+                isVisible = isFriend;
+            }
+
+            if (isVisible)
+            {
+                list.Add(await ToPlaceDetailsDto(p, userId));
+            }
+        }
+
+        return list;
     }
 
     public async Task AddFavoriteAsync(int id, string userId)
     {
-        // Check if already favorited
         var exists = await db.Favorited
             .AnyAsync(f => f.UserId == userId && f.PlaceId == id);
         
@@ -225,7 +323,6 @@ public class PlaceService(
             return;
         }
         
-        // Check if place exists
         var placeExists = await db.Places.AnyAsync(p => p.Id == id);
         if (!placeExists)
         {
@@ -256,51 +353,40 @@ public class PlaceService(
         }
     }
 
-    public async Task<IEnumerable<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId)
+    private async Task<PlaceDetailsDto> ToPlaceDetailsDto(Place p, string? userId)
     {
-        var favorites = await db.Favorited
-            .Where(f => f.UserId == userId)
-            .Include(f => f.Place)
-                .ThenInclude(p => p.PlaceActivities)
-                    .ThenInclude(pa => pa.ActivityKind)
-            .AsNoTracking()
-            .ToListAsync();
+        var isOwner = userId != null && p.OwnerUserId == userId;
+        
+        var isFavorited = userId != null && await db.Favorited
+            .AnyAsync(f => f.UserId == userId && f.PlaceId == p.Id);
 
-        var list = favorites.Select(f =>
-        {
-            var activities = f.Place.PlaceActivities
-                .Select(a => new ActivitySummaryDto(
-                    a.Id,
-                    a.Name,
-                    a.ActivityKindId,
-                    a.ActivityKind?.Name
-                ))
-                .ToArray();
+        var activities = p.PlaceActivities
+            .Select(a => new ActivitySummaryDto(
+                a.Id,
+                a.Name,
+                a.ActivityKindId,
+                a.ActivityKind?.Name
+            ))
+            .ToArray();
 
-            var activityKindNames = f.Place.PlaceActivities
-                .Where(a => a.ActivityKind != null)
-                .Select(a => a.ActivityKind!.Name)
-                .Distinct()
-                .ToArray();
+        var activityKindNames = p.PlaceActivities
+            .Where(a => a.ActivityKind != null)
+            .Select(a => a.ActivityKind!.Name)
+            .Distinct()
+            .ToArray();
 
-            var isOwner = f.Place.OwnerUserId == userId;
-
-            return new PlaceDetailsDto(
-                f.Place.Id,
-                f.Place.Name,
-                f.Place.Address ?? string.Empty,
-                f.Place.Latitude,
-                f.Place.Longitude,
-                f.Place.IsPublic,
-                isOwner,
-                IsFavorited: true,
-                activities,
-                activityKindNames
-            );
-        }).ToList();
-
-        logger.LogInformation("Favorited places for {UserId} retrieved: {Count} places", userId, list.Count);
-
-        return list;
+        return new PlaceDetailsDto(
+            p.Id,
+            p.Name,
+            p.Address ?? string.Empty,
+            p.Latitude,
+            p.Longitude,
+            p.Visibility,
+            p.Type,
+            isOwner,
+            isFavorited,
+            activities,
+            activityKindNames
+        );
     }
 }

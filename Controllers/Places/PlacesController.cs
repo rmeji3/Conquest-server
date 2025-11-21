@@ -5,6 +5,7 @@ namespace Conquest.Controllers.Places
 {
     using System.Security.Claims;
     using Conquest.Dtos.Places;
+    using Conquest.Models.Places;
     using Conquest.Services.Places;
     using Microsoft.AspNetCore.Mvc;
 
@@ -47,17 +48,19 @@ namespace Conquest.Controllers.Places
             return Ok(result);
         }
 
-        // GET /api/places/nearby?lat=..&lng=..&radiusKm=5&activityName=soccer&activityKind=outdoor
+        // GET /api/places/nearby?lat=..&lng=..&radiusKm=5&activityName=soccer&activityKind=outdoor&visibility=Public&type=Verified
         [HttpGet("nearby")]
         public async Task<ActionResult<IEnumerable<PlaceDetailsDto>>> Nearby(
             [FromQuery] double lat,
             [FromQuery] double lng,
             [FromQuery] double radiusKm = 5,
             [FromQuery] string? activityName = null,
-            [FromQuery] string? activityKind = null)
+            [FromQuery] string? activityKind = null,
+            [FromQuery] PlaceVisibility? visibility = null,
+            [FromQuery] PlaceType? type = null)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await placeService.SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, userId);
+            var result = await placeService.SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, visibility, type, userId);
             return Ok(result);
         }
 

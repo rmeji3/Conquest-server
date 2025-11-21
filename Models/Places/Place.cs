@@ -15,7 +15,8 @@ namespace Conquest.Models.Places
         public double Longitude { get; init; }
         [MaxLength(100)]
         public string OwnerUserId { get; set; } = null!;
-        public bool IsPublic { get; set; } = false;
+        public PlaceVisibility Visibility { get; set; } = PlaceVisibility.Private;
+        public PlaceType Type { get; set; } = PlaceType.Custom;
         public ICollection<PlaceActivity> PlaceActivities { get; set; } = [];
         public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
     }

@@ -52,7 +52,7 @@ Registered services:
 - JWT options bound from `configuration["Jwt"]` (Key, Issuer, Audience, AccessTokenMinutes).
 - **Redis**: `IConnectionMultiplexer` (singleton), distributed cache, `IRedisService` (scoped).
 - **Session**: Distributed session state with Redis backend (30-minute timeout).
-- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IProfileService`, `IAuthService`, `IRedisService`.
+- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IPlaceNameService` (Google Places API), `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IProfileService`, `IAuthService`, `IRedisService`.
 - **Middleware**: `GlobalExceptionHandler` (transient), `RateLimitMiddleware` (scoped).
 - Authentication: JWT Bearer with validation (issuer, audience, lifetime, signing key).
 - Swagger with Bearer security scheme.
@@ -69,6 +69,43 @@ Pipeline order:
 7. Authorization
 8. Static files
 9. Controller endpoints via `app.MapControllers()`
+
+### 3.1. Configuration Reference
+
+Required `appsettings.json` keys:
+```json
+{
+  "ConnectionStrings": {
+    "AuthConnection": "Data Source=auth.db",
+    "AppConnection": "Data Source=app.db",
+    "RedisConnection": "localhost:6379"
+  },
+  "Jwt": {
+    "Key": "[secret-key-minimum-32-chars]",
+    "Issuer": "ConquestAPI",
+    "Audience": "ConquestApp",
+    "AccessTokenMinutes": 60
+  },
+  "Google": {
+    "ApiKey": "[google-places-api-key]"
+  },
+  "RateLimiting": {
+    "GlobalLimitPerMinute": 100,
+    "AuthenticatedLimitPerMinute": 200,
+    "AuthEndpointsLimitPerMinute": 5,
+    "PlaceCreationLimitPerDay": 10
+  }
+}
+```
+
+**Development overrides** (`appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "RedisConnection": "localhost:6379,abortConnect=false"
+  }
+}
+```
 
 ---
 ## 4. Authentication & Authorization
@@ -139,7 +176,7 @@ Property Configuration:
 |--------|-----|-------------|-----------|-------|
 | AppUser | `IdentityUser` | FirstName, LastName, ProfileImageUrl | (Friends) | Stored in Auth DB |
 | Friendship | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt | User, Friend | Symmetric friendship stored as two Accepted rows after accept |
-| Place | Id | Name, Address, Latitude, Longitude, OwnerUserId, IsPublic, CreatedUtc | PlaceActivities | OwnerUserId is string (Identity FK) |
+| Place | Id | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
 | Favorited | Id | UserId, PlaceId | Place | Unique per user per place; cascade deletes with Place |
 | ActivityKind | Id | Name | PlaceActivities | Seeded |
 | PlaceActivity | Id | PlaceId, ActivityKindId?, Name, CreatedUtc | Place, ActivityKind, Reviews, CheckIns | Unique per place by Name |
@@ -179,8 +216,10 @@ Property Configuration:
 - `FriendSummaryDto(Id, UserName, FirstName, LastName, ProfileImageUrl?)`
 
 ### Places
-- `UpsertPlaceDto(Name, Address, Latitude, Longitude, IsPublic)`
-- `PlaceDetailsDto(Id, Name, Address, Latitude, Longitude, IsPublic, IsOwner, IsFavorited, Activities[ActivitySummaryDto], ActivityKinds[string])`
+- `PlaceVisibility` enum: `Private = 0`, `Friends = 1`, `Public = 2`
+- `PlaceType` enum: `Custom = 0`, `Verified = 1`
+- `UpsertPlaceDto(Name, Address?, Latitude, Longitude, Visibility, Type)`
+- `PlaceDetailsDto(Id, Name, Address, Latitude, Longitude, Visibility, Type, IsOwner, IsFavorited, Activities[ActivitySummaryDto], ActivityKinds[string])`
 
 ### Profiles
 - `ProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?)`
@@ -205,15 +244,40 @@ Property Configuration:
 - **Logic**: Generates JWT with configured options, includes roles and identity claims
 
 #### PlaceService (`IPlaceService`)
-- **Purpose**: Place management and geo-spatial operations
+- **Purpose**: Place management with geo-spatial operations, privacy controls, and official place verification
+- **Dependencies**: `IPlaceNameService` (Google Places API), `IRedisService`, `IFriendService`
 - **Methods**:
-  - `CreatePlaceAsync(UpsertPlaceDto, userId)` - Creates place with rate limiting (max 10 per user)
-  - `GetPlaceByIdAsync(id, userId)` - Retrieves place with privacy checks and favorite status
-  - `SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, userId)` - Geo-spatial search with bounding box calculation, includes favorite status
-  - `AddFavoriteAsync(id, userId)` - Adds place to user's favorites with duplicate prevention
-  - `UnfavoriteAsync(id, userId)` - Removes place from user's favorites
-  - `GetFavoritedPlacesAsync(userId)` - Retrieves all favorited places with full details
-- **Logic**: Rate limiting, privacy enforcement, geo calculations (111.32 km per degree), duplicate favorite prevention, place existence validation, batch favorite checking (SearchNearbyAsync) to avoid N+1 queries
+  - `CreatePlaceAsync(UpsertPlaceDto, userId)` - Creates place with type-specific duplicate detection and rate limiting
+  - `GetPlaceByIdAsync(id, userId)` - Retrieves place with privacy checks (Private/Friends/Public visibility)
+  - `SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, visibility, type, userId)` - Geo-spatial search with filters
+  - `AddFavoriteAsync(id, userId)` - Adds place to user's favorites
+  - `UnfavoriteAsync(id, userId)` - Removes place from favorites
+  - `GetFavoritedPlacesAsync(userId)` - Retrieves all favorited places
+- **PlaceType Logic**:
+  - **Verified Places** (Public only): Require address, check duplicates by address only, auto-fetch name from Google Places API
+  - **Custom Places**: Address optional, check duplicates by coordinates (~50m), use user-provided name
+  - **Visibility Rule**: Private/Friends places are automatically converted to Custom type (no Google API calls for non-public places)
+- **Privacy Enforcement**:
+  - **Private**: Only owner can view
+  - **Friends**: Owner + accepted friends can view
+  - **Public**: Everyone can view
+- **Duplicate Detection** (Public places only):
+  - Verified: Address match only (no coordinate checking)
+  - Custom: Coordinates within ~50m (0.0005 degrees)
+  - Private/Friends: No duplicate checking (always create new)
+- **Rate Limiting**: Max 10 places per user per day (Redis-backed)
+
+#### GooglePlacesService (`IPlaceNameService`)
+- **Purpose**: Fetch official place names from Google Places API (New)
+- **Methods**:
+  - `GetPlaceNameAsync(lat, lng)` - Returns official place name from Google or null if not found
+- **Implementation**:
+  - Uses Google Places API `places:searchNearby` endpoint
+  - 50m search radius, max 1 result
+  - Field mask: `places.displayName`
+  - Falls back to user-provided name if no POI found
+- **Configuration**: Requires `Google:ApiKey` in `appsettings.json`
+- **Rate Limiting**: Only called for Public Verified places (not for Custom or Private/Friends)
 
 #### EventService (`IEventService`)
 - **Purpose**: Event lifecycle and attendance management
@@ -333,9 +397,9 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 ### PlacesController (`/api/places`)
 | Method | Route | Auth | Body | Returns | Notes |
 |--------|-------|------|------|---------|-------|
-| POST | /api/places | A | `UpsertPlaceDto` | `PlaceDetailsDto` | Daily per-user creation limit (10) |
-| GET | /api/places/{id} | A | — | `PlaceDetailsDto` | Hides private non-owned places |
-| GET | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind) | A | — | `PlaceDetailsDto[]` | Bounding box + optional activity filters |
+| POST | /api/places | A | `UpsertPlaceDto` | `PlaceDetailsDto` | Daily per-user creation limit (10); Verified type requires address; Private/Friends auto-converted to Custom |
+| GET | /api/places/{id} | A | — | `PlaceDetailsDto` | Respects visibility: Private (owner only), Friends (owner + friends), Public (all) |
+| GET | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind,visibility,type) | A | — | `PlaceDetailsDto[]` | Geo-search with optional filters: visibility (Public/Private/Friends), type (Verified/Custom), activity filters |
 | POST | /api/places/favorited/{id} | A | — | 200 OK | Adds place to favorites; prevents duplicates, validates place exists |
 | DELETE | /api/places/favorited/{id} | A | — | 204 NoContent | Removes place from favorites; idempotent |
 | GET | /api/places/favorited | A | — | `PlaceDetailsDto[]` | Returns all favorited places with activities |
@@ -345,17 +409,94 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 |--------|-------|------|------|---------|-------|
 | GET | /api/profiles/me | A | — | `PersonalProfileDto` | Current user profile |
 | GET | /api/profiles/search?username= | A | — | `ProfileDto[]` | Prefix search on normalized username; excludes self |
-- Friend requests prevent duplicates, self-addition, blocked status, and existing outgoing/incoming collisions.
-- Review scopes: `friends` uses accepted friendships from `FriendService`.
-- Review likes: Idempotent operations (liking an already liked review does nothing), batch `IsLiked` checking used for performance.
-- Password flows do not leak account existence (uniform responses for missing users).
-- **Global Exception Handling**: Unhandled exceptions return a standardized `500 Internal Server Error` JSON response (`ProblemDetails`).
+
+### ReviewsController (`/api/reviews`)
+| Method | Route | Auth | Body | Returns | Notes |
+|--------|-------|------|------|---------|-------|
+| POST | /api/reviews/{placeActivityId} | A | `CreateReviewDto` | `ReviewDto` | Creates review for activity |
+| GET | /api/reviews/{placeActivityId}?scope={mine/friends/global} | A | — | `ReviewDto[]` | Returns reviews with `IsLiked` status |
+| GET | /api/reviews/explore | A | `ExploreReviewsFilterDto` | `ExploreReviewDto[]` | Paginated review feed with filters |
+| POST | /api/reviews/{reviewId}/like | A | — | 200 OK | Like a review (idempotent) |
+| DELETE | /api/reviews/{reviewId}/like | A | — | 204 NoContent | Unlike a review (idempotent) |
+| GET | /api/reviews/liked | A | — | `ExploreReviewDto[]` | User's liked reviews |
+
+---
+## 10. Validation & Business Rules
+
+### Authentication
+- Username must be unique (case-insensitive)
+- Password flows do not leak account existence (uniform responses for missing users)
+- JWT tokens expire after configured minutes (default: 60)
+- Account lockout enforced after failed login attempts
+
+### Places
+- Daily creation limit: 10 per user (Redis-backed)
+- Privacy enforcement:
+  - **Private**: Only owner can view
+  - **Friends**: Owner + accepted friends can view
+  - **Public**: Everyone can view
+- Duplicate detection (Public places only):
+  - Verified: Address match only
+  - Custom: Coordinates within ~50m (0.0005 degrees)
+  - Private/Friends: No duplicate checking
+
+### PlaceType Business Rules
+- **Verified Places**:
+  - Must be Public visibility
+  - Address is required
+  - Name auto-fetched from Google Places API
+  - Duplicates checked by exact address match only
+  
+- **Custom Places**:
+  - Can be any visibility (Public/Friends/Private)
+  - Address is optional
+  - User-provided name is used
+  - Duplicates checked by coordinate proximity (~50m)
+
+- **Automatic Conversions**:
+  - Private/Friends places → automatically converted to Custom type
+  - Prevents unnecessary Google API calls for non-public places
+
+### Reviews
+- Scope filtering: mine/friends/global
+- Likes are idempotent (re-liking/re-unliking does nothing)
+- Batch `IsLiked` checking prevents N+1 queries
+- Pagination: max 100 items per page (default 20)
+- Rating range: [validation needed - see future enhancements]
+
+### Events
+- Start time must be in future
+- Duration must be ≥15 minutes
+- Creators auto-join their events
+- Only creator can delete event
+- Cannot attend own event (creator is already an attendee)
+
+### Activities
+- Name must be unique per place (case-insensitive)
+- ActivityKind is optional
+- Cascade deletes when parent Place is deleted
+
+### Friends
+- Prevents: duplicates, self-addition, blocked users
+- Bidirectional relationship: accepting creates two Accepted rows
+- Friend requests are Pending until accepted
+
+### Tags (Pending Full Implementation)
+- Tag moderation flags exist: `IsBanned`, `IsApproved`
+- Canonical tag relationship via `CanonicalTagId`
+- **Status**: Models and database schema exist, but no controller endpoints or moderation workflow implemented yet
+
+### CheckIns (Pending Full Implementation)
+- Models exist with relationship to PlaceActivity
+- Includes optional Note field and CreatedAt timestamp
+- **Status**: Database schema exists, but no controller endpoints implemented yet
 
 ---
 ## 11. Indexes, Seed Data, Performance Notes
 - Geospatial queries use bounding box (approximate) before distance calculation (Haversine) filtered by radius.
-- Suggest future optimization: create a covering index on `(Latitude, Longitude, IsPublic)` if query frequency increases.
-- Event attendee queries are batched (N+1 fixed) in `EventsController` to reduce database round-trips.
+- Suggest future optimization: create a covering index on `(Latitude, Longitude, Visibility, Type)` if query frequency increases.
+- Event attendee queries are batched (N+1 fixed) in `EventMapper` to reduce database round-trips.
+- Review `IsLiked` status is batch-checked to avoid N+1 queries.
 
 ---
 ## 12. Migration & EF Core Operations
@@ -506,7 +647,7 @@ Multi-layered rate limiting protects API from abuse and ensures fair resource al
 | Layer | Items |
 |-------|-------|
 | Auth | Register, Login, Me, Password flows |
-| Places | Create, GetById, Nearby search |
+| Places | Create, GetById, Nearby search, Favorites |
 | Activities | Create activity, CRUD kinds |
 | Events | Create, View, Manage attendance, Public search |
 | Friends | Add, Accept, List, Incoming, Remove |
@@ -514,20 +655,80 @@ Multi-layered rate limiting protects API from abuse and ensures fair resource al
 | Reviews | Create, List by scope, Like/Unlike, Explore Feed (with filters) |
 
 ---
-## 15. Suggested Future Enhancements
-- Add pagination to large list endpoints (Events public, Nearby Places, Reviews).
-- Normalize and validate rating range (e.g., 1–5) at entity or DTO layer.
-- Add soft delete for Places and Activities to preserve historical reviews.
-- Consolidate multiple per-event attendee user lookups into single batched query.
-- Implement email service for password reset in production.
+## 17. Error Response Formats
+
+### Standard Error Response
+All errors follow the ProblemDetails format:
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "One or more validation errors occurred.",
+  "status": 400,
+  "errors": {
+    "fieldName": ["Error message"]
+  }
+}
+```
+
+### Common Error Status Codes
+- `400 Bad Request` - Validation errors, invalid input
+- `401 Unauthorized` - Missing or invalid JWT token
+- `403 Forbidden` - Insufficient permissions (e.g., accessing Private place)
+- `404 Not Found` - Resource does not exist
+- `409 Conflict` - Duplicate resource (e.g., existing friendship)
+- `429 Too Many Requests` - Rate limit exceeded
+- `500 Internal Server Error` - Unhandled exceptions (via GlobalExceptionHandler)
+
+### Rate Limit Error (429)
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please try again in 60 seconds.",
+  "retryAfter": 60
+}
+```
+
+### Domain-Specific Error Messages
+- Place creation limit: "You've reached the daily limit for adding places."
+- Verified place without address: "Address is required for verified places."
+- Duplicate place: "A place already exists at this location."
+- Event duration: "Event duration must be at least 15 minutes."
+- Self-friend request: "You cannot add yourself as a friend."
 
 ---
-## 16. Agent Usage Notes
+## 18. Suggested Future Enhancements
+
+**High Priority:**
+- ✅ ~~PlaceType feature (Verified vs Custom)~~ - COMPLETED
+- ✅ ~~Review likes with `IsLiked` flag~~ - COMPLETED
+- ✅ ~~Redis integration for rate limiting~~ - COMPLETED
+- Implement tag moderation system (approval/banning workflow, endpoints)
+- CheckIns feature implementation (models exist, need controller endpoints)
+- Normalize and validate rating range (1–5) at DTO/model layer
+
+**Medium Priority:**
+- Add soft delete for Places and Activities to preserve historical reviews
+- Email service for password reset (production)
+- Pagination improvements for large list endpoints
+- WebSocket support for real-time event updates
+- Profile picture upload functionality
+
+**Performance:**
+- Consider PostGIS for advanced geospatial queries
+- Add covering index: `(Latitude, Longitude, Visibility, Type)`
+- Implement response caching for public data
+- Redis cache invalidation strategy for frequently updated data
+
+---
+## 19. Agent Usage Notes
 When generating or modifying code:
 - Respect existing route and DTO contracts documented above.
 - Validate business rules listed in Section 10 for new features.
 - When adding new models: update the corresponding DbContext, create migration, and extend this guide.
 - Keep new endpoints consistent with the route naming: plural nouns, kebab-case only when explicitly needed.
+- Follow "Thin Controller, Fat Service" architecture pattern.
+- Use Redis for rate limiting and caching where appropriate.
+- Maintain privacy enforcement for all place-related operations.
 
 ---
 End of guide.
