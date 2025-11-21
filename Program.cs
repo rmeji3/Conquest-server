@@ -20,7 +20,65 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 
+// Load environment variables from .env file
+DotNetEnv.Env.Load();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Override configuration with environment variables
+// ConnectionStrings
+var authConnection = Environment.GetEnvironmentVariable("AUTH_CONNECTION");
+if (!string.IsNullOrEmpty(authConnection))
+    builder.Configuration["ConnectionStrings:AuthConnection"] = authConnection;
+
+var appConnection = Environment.GetEnvironmentVariable("APP_CONNECTION");
+if (!string.IsNullOrEmpty(appConnection))
+    builder.Configuration["ConnectionStrings:AppConnection"] = appConnection;
+
+var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION");
+if (!string.IsNullOrEmpty(redisConnection))
+    builder.Configuration["ConnectionStrings:RedisConnection"] = redisConnection;
+
+// JWT Settings
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY");
+if (!string.IsNullOrEmpty(jwtKey))
+    builder.Configuration["Jwt:Key"] = jwtKey;
+
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER");
+if (!string.IsNullOrEmpty(jwtIssuer))
+    builder.Configuration["Jwt:Issuer"] = jwtIssuer;
+
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE");
+if (!string.IsNullOrEmpty(jwtAudience))
+    builder.Configuration["Jwt:Audience"] = jwtAudience;
+
+var jwtAccessTokenMinutes = Environment.GetEnvironmentVariable("JWT_ACCESS_TOKEN_MINUTES");
+if (!string.IsNullOrEmpty(jwtAccessTokenMinutes))
+    builder.Configuration["Jwt:AccessTokenMinutes"] = jwtAccessTokenMinutes;
+
+// Google API Key
+var googleApiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+if (!string.IsNullOrEmpty(googleApiKey))
+    builder.Configuration["Google:ApiKey"] = googleApiKey;
+
+// Rate Limiting
+var rateLimitGlobal = Environment.GetEnvironmentVariable("RATE_LIMIT_GLOBAL_PER_MINUTE");
+if (!string.IsNullOrEmpty(rateLimitGlobal))
+    builder.Configuration["RateLimiting:GlobalLimitPerMinute"] = rateLimitGlobal;
+
+var rateLimitAuth = Environment.GetEnvironmentVariable("RATE_LIMIT_AUTHENTICATED_PER_MINUTE");
+if (!string.IsNullOrEmpty(rateLimitAuth))
+    builder.Configuration["RateLimiting:AuthenticatedLimitPerMinute"] = rateLimitAuth;
+
+var rateLimitAuthEndpoints = Environment.GetEnvironmentVariable("RATE_LIMIT_AUTH_ENDPOINTS_PER_MINUTE");
+if (!string.IsNullOrEmpty(rateLimitAuthEndpoints))
+    builder.Configuration["RateLimiting:AuthEndpointsLimitPerMinute"] = rateLimitAuthEndpoints;
+
+var rateLimitPlaceCreation = Environment.GetEnvironmentVariable("RATE_LIMIT_PLACE_CREATION_PER_DAY");
+if (!string.IsNullOrEmpty(rateLimitPlaceCreation))
+    builder.Configuration["RateLimiting:PlaceCreationLimitPerDay"] = rateLimitPlaceCreation;
+
+
 
 // --- EF Core (SQLite) ---
 // Auth (Identity tables)
