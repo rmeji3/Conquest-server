@@ -1,5 +1,19 @@
 # User guide
 
+## Redis Setup (Mac)
+You can install Redis using Homebrew or Docker.
+
+### Option 1: Homebrew (Recommended)
+```bash
+brew install redis
+brew services start redis
+```
+
+### Option 2: Docker
+```bash
+docker run --name redis -d -p 6379:6379 redis
+```
+
 ## Migrating sqlite Servers
 If you get the following error:
 ```
