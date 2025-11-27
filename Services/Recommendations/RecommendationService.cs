@@ -1,0 +1,160 @@
+using Conquest.Data.App;
+using Conquest.Models.Places;
+using Conquest.Services.Google;
+using Conquest.Dtos.Recommendations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+namespace Conquest.Services.Recommendations;
+
+public class RecommendationService(
+    Kernel kernel,
+    AppDbContext dbContext,
+    IPlaceNameService googlePlacesService,
+    ILogger<RecommendationService> logger)
+{
+    public async Task<List<RecommendationDto>> GetRecommendationsAsync(string vibe, double lat, double lng, double radiusKm)
+    {
+        // 1. Use Semantic Kernel to analyze the "vibe" and extract search terms
+        var searchTerms = await AnalyzeVibeAsync(vibe, lat, lng);
+        logger.LogInformation("Vibe '{Vibe}' analyzed into search terms: {Terms}", vibe, string.Join(", ", searchTerms));
+
+        if (searchTerms.Count == 0)
+        {
+            return [];
+        }
+
+        // 2. Search Local Database first
+        var localPlaces = await SearchLocalDatabaseAsync(searchTerms, lat, lng, radiusKm);
+        var localResults = localPlaces.Select(p => new RecommendationDto
+        {
+            Name = p.Name,
+            Address = p.Address,
+            Latitude = p.Latitude,
+            Longitude = p.Longitude,
+            Source = "Local",
+            LocalPlaceId = p.Id
+        }).ToList();
+        
+        // If we have enough local results, return them (prioritizing local data)
+        if (localResults.Count >= 3)
+        {
+            logger.LogInformation("Found enough local matches ({Count}). Returning local results.", localResults.Count);
+            return localResults;
+        }
+
+        // 3. Fallback to Google Places API if local results are insufficient
+        logger.LogInformation("Insufficient local matches. Falling back to Google Places.");
+        var googleResults = new List<RecommendationDto>();
+        
+        // Use the first (most relevant) search term for the Google query
+        var primaryQuery = searchTerms[0]; 
+        var googlePlaces = await googlePlacesService.SearchPlacesAsync(primaryQuery, lat, lng, radiusKm);
+        
+        googleResults.AddRange(googlePlaces.Select(g => new RecommendationDto
+        {
+            Name = g.Name,
+            Address = g.Address,
+            Latitude = g.Lat,
+            Longitude = g.Lng,
+            Source = "Google",
+            LocalPlaceId = null
+        }));
+
+        // Combine results (deduplicate by name roughly)
+        var finalResults = localResults
+            .Concat(googleResults)
+            .GroupBy(r => r.Name) // Simple dedupe by name
+            .Select(g => g.First())
+            .ToList();
+        
+        if (finalResults.Count == 0)
+        {
+            return [new RecommendationDto 
+            { 
+                Name = "No places found matching your vibe within this radius.", 
+                Address = "Try increasing the radius or changing your vibe.",
+                Source = "System",
+                Latitude = null,
+                Longitude = null,
+                LocalPlaceId = null
+            }];
+        }
+
+        return finalResults;
+    }
+
+    private async Task<List<string>> AnalyzeVibeAsync(string vibe, double lat, double lng)
+    {
+        try
+        {
+            var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+            var prompt = $"""
+                          You are a helpful assistant that translates a "vibe" or "feeling" into concrete search queries for places.
+                          User Vibe: "{vibe}"
+                          User Location: Latitude {lat}, Longitude {lng}
+                          
+                          Output a comma-separated list of 1-3 specific search terms (e.g., "coffee shop", "library", "park") that would match this vibe.
+                          IMPORTANT: If the location suggests a non-English speaking country, include terms in the LOCAL language as well as English.
+                          Do not include any other text, just the comma-separated terms.
+                          """;
+
+            var result = await chatCompletionService.GetChatMessageContentAsync(prompt);
+            var text = result.Content;
+
+            if (string.IsNullOrWhiteSpace(text)) return [];
+
+            return text.Split(',')
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error analyzing vibe with Semantic Kernel");
+            // Fallback: just use the vibe itself as a keyword if AI fails
+            return [vibe];
+        }
+    }
+
+    private async Task<List<Place>> SearchLocalDatabaseAsync(List<string> searchTerms, double lat, double lng, double radiusKm)
+    {
+        // 1 degree latitude is approx 111 km
+        var degrees = radiusKm / 111.0;
+        
+        var minLat = lat - degrees;
+        var maxLat = lat + degrees;
+        var minLng = lng - degrees;
+        var maxLng = lng + degrees;
+
+        var query = dbContext.Places
+            .Include(p => p.PlaceActivities)
+                .ThenInclude(pa => pa.ActivityKind)
+            .Include(p => p.PlaceActivities)
+                .ThenInclude(pa => pa.Reviews)
+                    .ThenInclude(r => r.ReviewTags)
+                        .ThenInclude(rt => rt.Tag)
+            .Where(p => p.Latitude >= minLat && p.Latitude <= maxLat && 
+                        p.Longitude >= minLng && p.Longitude <= maxLng);
+
+        var nearbyPlaces = await query.ToListAsync();
+
+        var matches = nearbyPlaces
+            .Where(p => searchTerms.Any(term => 
+                // Match Place Name
+                p.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                // Match Activity Name (e.g. "Pickup Soccer")
+                p.PlaceActivities.Any(pa => pa.Name.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                // Match Activity Kind (e.g. "Sports")
+                p.PlaceActivities.Any(pa => pa.ActivityKind?.Name.Contains(term, StringComparison.OrdinalIgnoreCase) == true) ||
+                // Match Tags on Reviews (e.g. "Cozy", "Crowded")
+                p.PlaceActivities.Any(pa => pa.Reviews.Any(r => r.ReviewTags.Any(rt => rt.Tag.Name.Contains(term, StringComparison.OrdinalIgnoreCase))))
+            ))
+            .Take(5)
+            .ToList();
+
+        return matches;
+    }
+}

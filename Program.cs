@@ -13,6 +13,8 @@ using Conquest.Services.Profiles;
 using Conquest.Services.Auth;
 using Conquest.Services.Redis;
 using Conquest.Services.Google;
+using Conquest.Services.Recommendations;
+using Microsoft.SemanticKernel;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -141,6 +143,21 @@ builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient<IPlaceNameService, GooglePlacesService>();
+builder.Services.AddScoped<RecommendationService>();
+
+// --- Semantic Kernel ---
+var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+if (!string.IsNullOrEmpty(openAiKey))
+{
+    builder.Services.AddKernel();
+    builder.Services.AddOpenAIChatCompletion("gpt-3.5-turbo", openAiKey);
+}
+else
+{
+    // Fallback if no key provided (prevents crash, but AI features won't work)
+    // In production you might want to throw or log a warning
+    Console.WriteLine("WARNING: OPENAI_API_KEY is missing. AI features will be disabled.");
+}
 
 // --- JWT Auth ---
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

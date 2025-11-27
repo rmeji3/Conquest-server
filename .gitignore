@@ -20,6 +20,7 @@ AppRecommendations.md
 /Data/App.db
 /Data/Auth.db
 app.db
+auth.db
 Migrations/
 Data/App.db
 Data/Auth.db

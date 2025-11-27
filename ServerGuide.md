@@ -52,7 +52,7 @@ Registered services:
 - JWT options bound from `configuration["Jwt"]` (Key, Issuer, Audience, AccessTokenMinutes).
 - **Redis**: `IConnectionMultiplexer` (singleton), distributed cache, `IRedisService` (scoped).
 - **Session**: Distributed session state with Redis backend (30-minute timeout).
-- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IPlaceNameService` (Google Places API), `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IProfileService`, `IAuthService`, `IRedisService`.
+- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IPlaceNameService` (Google Places API), `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IProfileService`, `IAuthService`, `IRedisService`, `RecommendationService`.
 - **Middleware**: `GlobalExceptionHandler` (transient), `RateLimitMiddleware` (scoped).
 - Authentication: JWT Bearer with validation (issuer, audience, lifetime, signing key).
 - Swagger with Bearer security scheme.
@@ -88,7 +88,12 @@ Required `appsettings.json` keys:
   },
   "Google": {
     "ApiKey": "[google-places-api-key]"
-  },
+  }
+}
+```
+
+**Environment Variables**:
+- `OPENAI_API_KEY`: Required for AI Recommendations (Semantic Kernel).,
   "RateLimiting": {
     "GlobalLimitPerMinute": 100,
     "AuthenticatedLimitPerMinute": 200,
@@ -172,21 +177,21 @@ Property Configuration:
 
 ---
 ## 6. Domain Models (Summaries)
-| Entity | Key | Core Fields | Navigation | Notes |
-|--------|-----|-------------|-----------|-------|
-| AppUser | `IdentityUser` | FirstName, LastName, ProfileImageUrl | (Friends) | Stored in Auth DB |
-| Friendship | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt | User, Friend | Symmetric friendship stored as two Accepted rows after accept |
-| Place | Id | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
-| Favorited | Id | UserId, PlaceId | Place | Unique per user per place; cascade deletes with Place |
-| ActivityKind | Id | Name | PlaceActivities | Seeded |
-| PlaceActivity | Id | PlaceId, ActivityKindId?, Name, CreatedUtc | Place, ActivityKind, Reviews, CheckIns | Unique per place by Name |
-| Review | Id | UserId, UserName, PlaceActivityId, Rating, Content, CreatedAt, Likes | PlaceActivity, ReviewTags | Rating int (range rules enforced externally); Likes initialized to 0 |
-| Tag | Id | Name (normalized), CanonicalTagId?, IsBanned, IsApproved | ReviewTags | Tag moderation flags |
-| ReviewTag | (ReviewId, TagId) | — | Review, Tag | Join table |
-| ReviewLike | Id | ReviewId, UserId, CreatedAt | Review | Unique per user per review; cascade deletes with Review |
-| CheckIn | Id | UserId, PlaceActivityId, Note, CreatedAt | PlaceActivity | Timestamp default |
-| Event | Id | Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedById, CreatedAt, Latitude, Longitude | Attendees (EventAttendee) | Status computed dynamically |
-| EventAttendee | (EventId, UserId) | JoinedAt | Event | Many-to-many join |
+| Entity        | Key                | Core Fields                                                                                                              | Navigation                             | Notes                                                                                                                 |
+| ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl                                                                                     | (Friends)                              | Stored in Auth DB                                                                                                     |
+| Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
+| Place         | Id                 | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
+| Favorited     | Id                 | UserId, PlaceId                                                                                                          | Place                                  | Unique per user per place; cascade deletes with Place                                                                 |
+| ActivityKind  | Id                 | Name                                                                                                                     | PlaceActivities                        | Seeded                                                                                                                |
+| PlaceActivity | Id                 | PlaceId, ActivityKindId?, Name, CreatedUtc                                                                               | Place, ActivityKind, Reviews, CheckIns | Unique per place by Name                                                                                              |
+| Review        | Id                 | UserId, UserName, PlaceActivityId, Rating, Content, CreatedAt, Likes                                                     | PlaceActivity, ReviewTags              | Rating int (range rules enforced externally); Likes initialized to 0                                                  |
+| Tag           | Id                 | Name (normalized), CanonicalTagId?, IsBanned, IsApproved                                                                 | ReviewTags                             | Tag moderation flags                                                                                                  |
+| ReviewTag     | (ReviewId, TagId)  | —                                                                                                                        | Review, Tag                            | Join table                                                                                                            |
+| ReviewLike    | Id                 | ReviewId, UserId, CreatedAt                                                                                              | Review                                 | Unique per user per review; cascade deletes with Review                                                               |
+| CheckIn       | Id                 | UserId, PlaceActivityId, Note, CreatedAt                                                                                 | PlaceActivity                          | Timestamp default                                                                                                     |
+| Event         | Id                 | Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedById, CreatedAt, Latitude, Longitude                 | Attendees (EventAttendee)              | Status computed dynamically                                                                                           |
+| EventAttendee | (EventId, UserId)  | JoinedAt                                                                                                                 | Event                                  | Many-to-many join                                                                                                     |
 
 ---
 ## 7. DTO Contracts
@@ -231,6 +236,9 @@ Property Configuration:
 - `ExploreReviewDto(ReviewId, PlaceActivityId, PlaceId, PlaceName, PlaceAddress, ActivityName, ActivityKindName?, Latitude, Longitude, Rating, Content?, UserName, CreatedAt, Likes, IsLiked, Tags[])`
 - `ExploreReviewsFilterDto(Latitude?, Longitude?, RadiusKm?, SearchQuery?, ActivityKindIds?[], PageSize, PageNumber)`
 
+### Recommendations
+- `RecommendationDto(Name, Address, Latitude?, Longitude?, Source, LocalPlaceId?)`
+
 ---
 ## 8. Services (Service Layer Architecture)
 
@@ -271,6 +279,7 @@ Property Configuration:
 - **Purpose**: Fetch official place names from Google Places API (New)
 - **Methods**:
   - `GetPlaceNameAsync(lat, lng)` - Returns official place name from Google or null if not found
+  - `SearchPlacesAsync(query, lat, lng, radiusKm)` - Text search with strict rectangular location restriction
 - **Implementation**:
   - Uses Google Places API `places:searchNearby` endpoint
   - 50m search radius, max 1 result
@@ -278,6 +287,17 @@ Property Configuration:
   - Falls back to user-provided name if no POI found
 - **Configuration**: Requires `Google:ApiKey` in `appsettings.json`
 - **Rate Limiting**: Only called for Public Verified places (not for Custom or Private/Friends)
+
+#### RecommendationService (`RecommendationService`)
+- **Purpose**: AI-powered place recommendations based on "vibe"
+- **Dependencies**: `Kernel` (Semantic Kernel), `IPlaceNameService`, `AppDbContext`
+- **Methods**:
+  - `GetRecommendationsAsync(vibe, lat, lng, radiusKm)` - Orchestrates the search flow
+- **Logic**:
+  1.  **Analyze Vibe**: Uses OpenAI (`gpt-3.5-turbo`) to translate user vibe (e.g., "cozy study spot") into specific search terms (e.g., "library", "cafe"). Includes location context for local language support.
+  2.  **Local Search**: Searches local `AppDbContext` for places matching terms in Name, Activities, or Review Tags within radius.
+  3.  **Fallback**: If < 3 local matches, calls Google Places API (Text Search with strict location restriction).
+  4.  **Merge**: Combines and deduplicates results, prioritizing local places. Returns "System" message if no results found.
 
 #### EventService (`IEventService`)
 - **Purpose**: Event lifecycle and attendance management
@@ -351,74 +371,79 @@ Property Configuration:
 Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body. Auth: A=Requires JWT, An=AllowAnonymous.
 
 ### ActivitiesController (`/api/activities`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| POST | /api/activities | A | `CreateActivityDto` | `ActivityDetailsDto` | Validates place, optional kind, uniqueness per place |
+| Method | Route           | Auth | Body                | Returns              | Notes                                                |
+| ------ | --------------- | ---- | ------------------- | -------------------- | ---------------------------------------------------- |
+| POST   | /api/activities | A    | `CreateActivityDto` | `ActivityDetailsDto` | Validates place, optional kind, uniqueness per place |
 
 ### ActivityKindsController (`/api/activity-kinds`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| GET | /api/activity-kinds | A | — | `ActivityKindDto[]` | Ordered by Name |
-| POST | /api/activity-kinds | A | `CreateActivityKindDto` | `ActivityKindDto` | Enforces unique name (case-insensitive) |
-| DELETE | /api/activity-kinds/{id} | A | — | 204 NoContent | Remove kind (restrict prevents cascade on activities) |
+| Method | Route                    | Auth | Body                    | Returns             | Notes                                                 |
+| ------ | ------------------------ | ---- | ----------------------- | ------------------- | ----------------------------------------------------- |
+| GET    | /api/activity-kinds      | A    | —                       | `ActivityKindDto[]` | Ordered by Name                                       |
+| POST   | /api/activity-kinds      | A    | `CreateActivityKindDto` | `ActivityKindDto`   | Enforces unique name (case-insensitive)               |
+| DELETE | /api/activity-kinds/{id} | A    | —                       | 204 NoContent       | Remove kind (restrict prevents cascade on activities) |
 
 ### AuthController (`/api/auth`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| POST | /api/auth/register | An | `RegisterDto` | `AuthResponse` | Username uniqueness manual check |
-| POST | /api/auth/login | An | `LoginDto` | `AuthResponse` | Lockout on failures (Identity configured) |
-| GET | /api/auth/me | A | — | `UserDto` | Uses `ClaimTypes.NameIdentifier` |
-| POST | /api/auth/password/forgot | An | `ForgotPasswordDto` | Dev returns token | Avoids enumeration |
-| POST | /api/auth/password/reset | An | `ResetPasswordDto` | 200 status | Decodes base64url token |
-| POST | /api/auth/password/change | A | `ChangePasswordDto` | 200 status | Validates current password |
+| Method | Route                     | Auth | Body                | Returns           | Notes                                     |
+| ------ | ------------------------- | ---- | ------------------- | ----------------- | ----------------------------------------- |
+| POST   | /api/auth/register        | An   | `RegisterDto`       | `AuthResponse`    | Username uniqueness manual check          |
+| POST   | /api/auth/login           | An   | `LoginDto`          | `AuthResponse`    | Lockout on failures (Identity configured) |
+| GET    | /api/auth/me              | A    | —                   | `UserDto`         | Uses `ClaimTypes.NameIdentifier`          |
+| POST   | /api/auth/password/forgot | An   | `ForgotPasswordDto` | Dev returns token | Avoids enumeration                        |
+| POST   | /api/auth/password/reset  | An   | `ResetPasswordDto`  | 200 status        | Decodes base64url token                   |
+| POST   | /api/auth/password/change | A    | `ChangePasswordDto` | 200 status        | Validates current password                |
 
 ### EventsController (`/api/Events`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| POST | /api/Events/create | A | `CreateEventDto` | `EventDto` | Validates times (future, duration ≥15m) |
-| GET | /api/Events/{id} | A | — | `EventDto` | Loads attendees + creator |
-| GET | /api/Events/mine | A | — | `EventDto[]` | Events created by requester |
-| GET | /api/Events/attending | A | — | `EventDto[]` | Where user is attendee |
-| POST | /api/Events/{id}/attend | A | — | 200 | Prevents attending own event & duplicates |
-| POST | /api/Events/{id}/leave | A | — | 200 | Removes attendee row |
-| DELETE | /api/Events/{id} | A | — | 200 | Only creator |
-| PATCH | /api/Events/{id} | A | `UpdateEventDto` | 200 | Partial updates |
-| GET | /api/Events/public (Q: from,to,lat,lng,radiusKm) | A | — | `EventDto[]` | Bounding box geo filter + upcoming only |
+| Method | Route                                            | Auth | Body             | Returns      | Notes                                     |
+| ------ | ------------------------------------------------ | ---- | ---------------- | ------------ | ----------------------------------------- |
+| POST   | /api/Events/create                               | A    | `CreateEventDto` | `EventDto`   | Validates times (future, duration ≥15m)   |
+| GET    | /api/Events/{id}                                 | A    | —                | `EventDto`   | Loads attendees + creator                 |
+| GET    | /api/Events/mine                                 | A    | —                | `EventDto[]` | Events created by requester               |
+| GET    | /api/Events/attending                            | A    | —                | `EventDto[]` | Where user is attendee                    |
+| POST   | /api/Events/{id}/attend                          | A    | —                | 200          | Prevents attending own event & duplicates |
+| POST   | /api/Events/{id}/leave                           | A    | —                | 200          | Removes attendee row                      |
+| DELETE | /api/Events/{id}                                 | A    | —                | 200          | Only creator                              |
+| PATCH  | /api/Events/{id}                                 | A    | `UpdateEventDto` | 200          | Partial updates                           |
+| GET    | /api/Events/public (Q: from,to,lat,lng,radiusKm) | A    | —                | `EventDto[]` | Bounding box geo filter + upcoming only   |
 
 ### FriendsController (`/api/Friends`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| GET | /api/Friends/friends | A | — | `FriendSummaryDto[]` | Accepted friendships only |
-| POST | /api/Friends/add/{username} | A | — | 200 | Creates Pending request if no existing relations |
-| POST | /api/Friends/accept/{username} | A | — | 200 | Converts Pending to Accepted + adds reverse Accepted row |
-| POST | /api/Friends/requests/incoming | A | — | `FriendSummaryDto[]` | Pending where current user is FriendId |
-| POST | /api/Friends/remove/{username} | A | — | 200 | Deletes both Accepted rows |
+| Method | Route                          | Auth | Body | Returns              | Notes                                                    |
+| ------ | ------------------------------ | ---- | ---- | -------------------- | -------------------------------------------------------- |
+| GET    | /api/Friends/friends           | A    | —    | `FriendSummaryDto[]` | Accepted friendships only                                |
+| POST   | /api/Friends/add/{username}    | A    | —    | 200                  | Creates Pending request if no existing relations         |
+| POST   | /api/Friends/accept/{username} | A    | —    | 200                  | Converts Pending to Accepted + adds reverse Accepted row |
+| POST   | /api/Friends/requests/incoming | A    | —    | `FriendSummaryDto[]` | Pending where current user is FriendId                   |
+| POST   | /api/Friends/remove/{username} | A    | —    | 200                  | Deletes both Accepted rows                               |
 
 ### PlacesController (`/api/places`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| POST | /api/places | A | `UpsertPlaceDto` | `PlaceDetailsDto` | Daily per-user creation limit (10); Verified type requires address; Private/Friends auto-converted to Custom |
-| GET | /api/places/{id} | A | — | `PlaceDetailsDto` | Respects visibility: Private (owner only), Friends (owner + friends), Public (all) |
-| GET | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind,visibility,type) | A | — | `PlaceDetailsDto[]` | Geo-search with optional filters: visibility (Public/Private/Friends), type (Verified/Custom), activity filters |
-| POST | /api/places/favorited/{id} | A | — | 200 OK | Adds place to favorites; prevents duplicates, validates place exists |
-| DELETE | /api/places/favorited/{id} | A | — | 204 NoContent | Removes place from favorites; idempotent |
-| GET | /api/places/favorited | A | — | `PlaceDetailsDto[]` | Returns all favorited places with activities |
+| Method | Route                                                                              | Auth | Body             | Returns             | Notes                                                                                                           |
+| ------ | ---------------------------------------------------------------------------------- | ---- | ---------------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| POST   | /api/places                                                                        | A    | `UpsertPlaceDto` | `PlaceDetailsDto`   | Daily per-user creation limit (10); Verified type requires address; Private/Friends auto-converted to Custom    |
+| GET    | /api/places/{id}                                                                   | A    | —                | `PlaceDetailsDto`   | Respects visibility: Private (owner only), Friends (owner + friends), Public (all)                              |
+| GET    | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind,visibility,type) | A    | —                | `PlaceDetailsDto[]` | Geo-search with optional filters: visibility (Public/Private/Friends), type (Verified/Custom), activity filters |
+| POST   | /api/places/favorited/{id}                                                         | A    | —                | 200 OK              | Adds place to favorites; prevents duplicates, validates place exists                                            |
+| DELETE | /api/places/favorited/{id}                                                         | A    | —                | 204 NoContent       | Removes place from favorites; idempotent                                                                        |
+| GET    | /api/places/favorited                                                              | A    | —                | `PlaceDetailsDto[]` | Returns all favorited places with activities                                                                    |
 
 ### ProfilesController (`/api/profiles`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| GET | /api/profiles/me | A | — | `PersonalProfileDto` | Current user profile |
-| GET | /api/profiles/search?username= | A | — | `ProfileDto[]` | Prefix search on normalized username; excludes self |
+| Method | Route                          | Auth | Body | Returns              | Notes                                               |
+| ------ | ------------------------------ | ---- | ---- | -------------------- | --------------------------------------------------- |
+| GET    | /api/profiles/me               | A    | —    | `PersonalProfileDto` | Current user profile                                |
+| GET    | /api/profiles/search?username= | A    | —    | `ProfileDto[]`       | Prefix search on normalized username; excludes self |
 
 ### ReviewsController (`/api/reviews`)
-| Method | Route | Auth | Body | Returns | Notes |
-|--------|-------|------|------|---------|-------|
-| POST | /api/reviews/{placeActivityId} | A | `CreateReviewDto` | `ReviewDto` | Creates review for activity |
-| GET | /api/reviews/{placeActivityId}?scope={mine/friends/global} | A | — | `ReviewDto[]` | Returns reviews with `IsLiked` status |
-| GET | /api/reviews/explore | A | `ExploreReviewsFilterDto` | `ExploreReviewDto[]` | Paginated review feed with filters |
-| POST | /api/reviews/{reviewId}/like | A | — | 200 OK | Like a review (idempotent) |
-| DELETE | /api/reviews/{reviewId}/like | A | — | 204 NoContent | Unlike a review (idempotent) |
-| GET | /api/reviews/liked | A | — | `ExploreReviewDto[]` | User's liked reviews |
+| Method | Route                                                      | Auth | Body                      | Returns              | Notes                                 |
+| ------ | ---------------------------------------------------------- | ---- | ------------------------- | -------------------- | ------------------------------------- |
+| POST   | /api/reviews/{placeActivityId}                             | A    | `CreateReviewDto`         | `ReviewDto`          | Creates review for activity           |
+| GET    | /api/reviews/{placeActivityId}?scope={mine/friends/global} | A    | —                         | `ReviewDto[]`        | Returns reviews with `IsLiked` status |
+| GET    | /api/reviews/explore                                       | A    | `ExploreReviewsFilterDto` | `ExploreReviewDto[]` | Paginated review feed with filters    |
+| POST   | /api/reviews/{reviewId}/like                               | A    | —                         | 200 OK               | Like a review (idempotent)            |
+| DELETE | /api/reviews/{reviewId}/like                               | A    | —                         | 204 NoContent        | Unlike a review (idempotent)          |
+| GET    | /api/reviews/liked                                         | A    | —                         | `ExploreReviewDto[]` | User's liked reviews                  |
+
+### RecommendationController (`/api/recommendations`)
+| Method | Route                                            | Auth | Body | Returns               | Notes                                   |
+| ------ | ------------------------------------------------ | ---- | ---- | --------------------- | --------------------------------------- |
+| GET    | /api/recommendations (Q: vibe, lat, lng, radius) | A    | —    | `RecommendationDto[]` | AI-powered search. Radius default 10km. |
 
 ---
 ## 10. Validation & Business Rules
@@ -589,11 +614,11 @@ Multi-layered rate limiting protects API from abuse and ensures fair resource al
 **Algorithm**: Sliding window (per-minute buckets)
 
 **Limits** (configurable in `appsettings.json`):
-| Client Type | Limit | Scope |
-|-------------|-------|-------|
-| Anonymous (IP-based) | 100 req/min | All endpoints except auth |
+| Client Type                | Limit       | Scope                     |
+| -------------------------- | ----------- | ------------------------- |
+| Anonymous (IP-based)       | 100 req/min | All endpoints except auth |
 | Authenticated (User-based) | 200 req/min | All endpoints except auth |
-| Auth endpoints (IP-based) | 5 req/min | `/api/auth/*` |
+| Auth endpoints (IP-based)  | 5 req/min   | `/api/auth/*`             |
 
 **Configuration**:
 ```json
@@ -644,15 +669,15 @@ Multi-layered rate limiting protects API from abuse and ensures fair resource al
 
 ---
 ## 16. Quick Reference Summary
-| Layer | Items |
-|-------|-------|
-| Auth | Register, Login, Me, Password flows |
-| Places | Create, GetById, Nearby search, Favorites |
-| Activities | Create activity, CRUD kinds |
-| Events | Create, View, Manage attendance, Public search |
-| Friends | Add, Accept, List, Incoming, Remove |
-| Profiles | Me, Search |
-| Reviews | Create, List by scope, Like/Unlike, Explore Feed (with filters) |
+| Layer      | Items                                                           |
+| ---------- | --------------------------------------------------------------- |
+| Auth       | Register, Login, Me, Password flows                             |
+| Places     | Create, GetById, Nearby search, Favorites                       |
+| Activities | Create activity, CRUD kinds                                     |
+| Events     | Create, View, Manage attendance, Public search                  |
+| Friends    | Add, Accept, List, Incoming, Remove                             |
+| Profiles   | Me, Search                                                      |
+| Reviews    | Create, List by scope, Like/Unlike, Explore Feed (with filters) |
 
 ---
 ## 17. Error Response Formats
@@ -701,7 +726,9 @@ All errors follow the ProblemDetails format:
 **High Priority:**
 - ✅ ~~PlaceType feature (Verified vs Custom)~~ - COMPLETED
 - ✅ ~~Review likes with `IsLiked` flag~~ - COMPLETED
+- ✅ ~~Review likes with `IsLiked` flag~~ - COMPLETED
 - ✅ ~~Redis integration for rate limiting~~ - COMPLETED
+- ✅ ~~AI Recommendations (Semantic Kernel + Google Fallback)~~ - COMPLETED
 - Implement tag moderation system (approval/banning workflow, endpoints)
 - CheckIns feature implementation (models exist, need controller endpoints)
 - Normalize and validate rating range (1–5) at DTO/model layer
