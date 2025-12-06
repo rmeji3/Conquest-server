@@ -69,12 +69,18 @@ namespace Conquest.Data.App
                 .HasIndex(pa => new { pa.PlaceId, pa.Name })
                 .IsUnique();
 
-            // Review: one review per user per activity and 1-5 rating only
+            // Review: 
+            // - one review per user per activity
+            // - 1-5 rating only
+            // - 1000 character limit
             builder.Entity<Review>()
                 .HasIndex(r => new { r.PlaceActivityId, r.UserId });
 
             builder.Entity<Review>()
                 .ToTable(t => t.HasCheckConstraint("CK_Review_Rating", "Rating >= 1 AND Rating <= 5"));
+
+            builder.Entity<Review>()
+                .ToTable(t => t.HasCheckConstraint("CK_Review_Content", "Content <= 1000"));
 
             // Tag: unique normalized name
             builder.Entity<Tag>()

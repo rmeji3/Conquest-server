@@ -17,6 +17,7 @@ public record ReviewDto(
 public record CreateReviewDto(
     [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5.")]
     int Rating,
+    [MaxLength(1000, ErrorMessage = "Content must be at most 1000 characters.")]
     string? Content,
     List<string>? Tags = null
 );

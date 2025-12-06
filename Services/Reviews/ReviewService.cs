@@ -34,6 +34,12 @@ public class ReviewService(
             throw new ArgumentException("Rating must be between 1 and 5.");
         }
 
+        if (dto.Content?.Length > 1000)
+        {
+            logger.LogWarning("CreateReview: Content too long for activity {PlaceActivityId} by {UserName}", placeActivityId, userName);
+            throw new ArgumentException("Content must be at most 1000 characters.");
+        }
+
         var review = new Review
         {
             PlaceActivityId = placeActivityId,
