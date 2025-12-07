@@ -38,7 +38,8 @@ public record ExploreReviewDto(
     DateTime CreatedAt,
     int Likes,
     bool IsLiked,
-    List<string> Tags
+    List<string> Tags,
+    bool IsPlaceDeleted
 );
 
 public class ExploreReviewsFilterDto
