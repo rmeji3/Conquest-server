@@ -231,6 +231,9 @@ Property Configuration:
 - `ExploreReviewDto(ReviewId, PlaceActivityId, PlaceId, PlaceName, PlaceAddress, ActivityName, ActivityKindName?, Latitude, Longitude, Rating, Content?, UserName, CreatedAt, Likes, IsLiked, Tags[])`
 - `ExploreReviewsFilterDto(Latitude?, Longitude?, RadiusKm?, SearchQuery?, ActivityKindIds?[], PageSize, PageNumber)`
 
+### Tags
+- `TagDto(Id, Name, Count, IsApproved, IsBanned)`
+
 ### Recommendations
 - `RecommendationDto(Name, Address, Latitude?, Longitude?, Source, LocalPlaceId?)`
 
@@ -318,6 +321,16 @@ Property Configuration:
   - `UnlikeReviewAsync(reviewId, userId)` - Removes like from review (idempotent)
   - `GetLikedReviewsAsync(userId)` - Retrieves all reviews liked by user
 - **Logic**: Activity validation, friend-based filtering via `IFriendService`, pagination with max 100 items per page (default 20), newest reviews first, batch `IsLiked` checking to avoid N+1 queries
+  
+#### TagService (`ITagService`)
+- **Purpose**: Tag management and moderation
+- **Methods**:
+  - `GetPopularTagsAsync(count)` - Returns most used tags (approved/unbanned only)
+  - `SearchTagsAsync(query, count)` - Search tags by name
+  - `ApproveTagAsync(id)` - Mark tag as approved
+  - `BanTagAsync(id)` - Mark tag as banned
+  - `MergeTagAsync(sourceId, targetId)` - Merges usage from source to target and deletes source
+
 
 #### ActivityService (`IActivityService`)
 - **Purpose**: Activity creation and validation
@@ -434,6 +447,15 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | POST   | /api/reviews/{reviewId}/like                               | A    | —                         | 200 OK               | Like a review (idempotent)                         |
 | DELETE | /api/reviews/{reviewId}/like                               | A    | —                         | 204 NoContent        | Unlike a review (idempotent)                       |
 | GET    | /api/reviews/liked                                         | A    | —                         | `ExploreReviewDto[]` | User's liked reviews                               |
+
+### TagsController (`/api/tags`)
+| Method | Route                                        | Auth | Body | Returns     | Notes                        |
+| ------ | -------------------------------------------- | ---- | ---- | ----------- | ---------------------------- |
+| GET    | /api/tags/popular (Q: count)                 | An   | —    | `TagDto[]`  | Popular approved tags        |
+| GET    | /api/tags/search (Q: q, count)               | A    | —    | `TagDto[]`  | Search tags                  |
+| POST   | /api/tags/admin/{id}/approve                 | A    | —    | 200         | Admin: Approve tag           |
+| POST   | /api/tags/admin/{id}/ban                     | A    | —    | 200         | Admin: Ban tag               |
+| POST   | /api/tags/admin/{id}/merge/{targetId}        | A    | —    | 200         | Admin: Merge source to target|
 
 ### RecommendationController (`/api/recommendations`)
 | Method | Route                                            | Auth | Body | Returns               | Notes                                   |
@@ -727,7 +749,7 @@ All errors follow the ProblemDetails format:
 - ✅ ~~CheckIns feature implementation~~ - COMPLETED (Merged into Reviews)
 - ✅ ~~Soft delete for Places with historical review preservation~~ - COMPLETED
 - ✅ ~~Enhanced Favorites (Counter + History)~~ - COMPLETED
-- Implement tag moderation system (approval/banning workflow, endpoints)
+- ✅ ~~Implement tag moderation system (approval/banning workflow, endpoints)~~ - COMPLETED
 - Normalize and validate rating range (1–5) at DTO/model layer
 
 **Medium Priority:**
