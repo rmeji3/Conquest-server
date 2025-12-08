@@ -215,10 +215,10 @@ Property Configuration:
 - `JwtOptions(Key, Issuer, Audience, AccessTokenMinutes)`
 
 ### Events
-- `EventDto(Id, Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedBy(UserSummaryDto), CreatedAt, Attendees[List<UserSummaryDto>], Status, Latitude, Longitude, PlaceId?)`
+- `EventDto(Id, Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedBy(UserSummaryDto), CreatedAt, Attendees[List<UserSummaryDto>], Status, Latitude, Longitude, PlaceId?, IsAdHoc)`
 - `UserSummaryDto(Id, UserName, FirstName, LastName)`
 - `CreateEventDto(Title, Description?, IsPublic, StartTime, EndTime, Location, Latitude, Longitude, PlaceId?)`
-- `UpdateEventDto` (all optional patch fields)
+- `UpdateEventDto(Title?, Description?, IsPublic?, StartTime?, EndTime?, Location?, Latitude?, Longitude?, PlaceId?)`
 
 ### Friends
 - `FriendSummaryDto(Id, UserName, FirstName, LastName, ProfileImageUrl?)`
@@ -453,6 +453,10 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 - **Place Linking**: Events can be optionally linked to a `Place` via `PlaceId`.
   - If `PlaceId` is provided, the Event inherits `Location`, `Latitude`, and `Longitude` from the Place.
   - Useful for "Quick Add" workflows where users select an existing place.
+- **IsAdHoc**: Computed flag (`PlaceId == null`). True if the event uses a custom/manual location.
+- **Update Logic**:
+  - Providing a new `PlaceId` links the event and overwrites location fields.
+  - Providing manual location fields (`Location`, `Latitude`, `Longitude`) WITHOUT a `PlaceId` **unlinks** the event (`PlaceId` becomes null).
 - **Moderation**: `Title`, `Description`, and `Location` (Place Name) are moderated.
   - Violations result in `400 Bad Request` with `ArgumentException`.
 
