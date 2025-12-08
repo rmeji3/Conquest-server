@@ -1,7 +1,9 @@
 using Conquest.Data.App;
+using Conquest.Dtos.Common;
 using Conquest.Dtos.Reviews;
 using Conquest.Models.Reviews;
 using Conquest.Services.Friends;
+using Conquest.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -115,7 +117,7 @@ public class ReviewService(
         );
     }
 
-    public async Task<IEnumerable<UserReviewsDto>> GetReviewsAsync(int placeActivityId, string scope, string userId)
+    public async Task<PaginatedResult<UserReviewsDto>> GetReviewsAsync(int placeActivityId, string scope, string userId, PaginationParams pagination)
     {
         var activityExists = await appDb.PlaceActivities
             .AnyAsync(pa => pa.Id == placeActivityId);
@@ -143,7 +145,7 @@ public class ReviewService(
                     if (friendIds.Count == 0)
                     {
                         // no friends → no reviews in this scope
-                        return Array.Empty<UserReviewsDto>();
+                        return new PaginatedResult<UserReviewsDto>(new List<UserReviewsDto>(), 0, pagination.PageNumber, pagination.PageSize);
                     }
                     query = query.Where(r => friendIds.Contains(r.UserId));
                     break;
@@ -192,17 +194,11 @@ public class ReviewService(
             })
             .ToList();
 
-        return groupedReviews;
+        return groupedReviews.ToPaginatedResult(pagination);
     }
 
-    public async Task<IEnumerable<ExploreReviewDto>> GetExploreReviewsAsync(ExploreReviewsFilterDto filter, string? userId)
+    public async Task<PaginatedResult<ExploreReviewDto>> GetExploreReviewsAsync(ExploreReviewsFilterDto filter, string? userId, PaginationParams pagination)
     {
-        // Validate pagination parameters
-        if (filter.PageSize <= 0 || filter.PageSize > 100)
-            filter.PageSize = 20;
-        
-        if (filter.PageNumber < 1)
-            filter.PageNumber = 1;
 
         var query = appDb.Reviews
             .AsNoTracking()
@@ -255,11 +251,10 @@ public class ReviewService(
         // Sort by Likes (Default)
         query = query.OrderByDescending(r => r.Likes);
 
-        var skip = (filter.PageNumber - 1) * filter.PageSize;
-
+        var count = await query.CountAsync();
         var reviews = await query
-            .Skip(skip)
-            .Take(filter.PageSize)
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync();
 
         // Batch check which reviews are liked by the current user
@@ -295,9 +290,9 @@ public class ReviewService(
         )).ToList();
 
         logger.LogInformation("Explore reviews fetched: Page {PageNumber}, Size {PageSize}, Count {Count}", 
-            filter.PageNumber, filter.PageSize, result.Count);
+            pagination.PageNumber, pagination.PageSize, count);
 
-        return result;
+        return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
     }
 
     public async Task LikeReviewAsync(int reviewId, string userId)
@@ -364,7 +359,7 @@ public class ReviewService(
         logger.LogInformation("Review {ReviewId} unliked by {UserId}", reviewId, userId);
     }
 
-    public async Task<IEnumerable<ExploreReviewDto>> GetLikedReviewsAsync(string userId)
+    public async Task<PaginatedResult<ExploreReviewDto>> GetLikedReviewsAsync(string userId, PaginationParams pagination)
     {
         var likedReviews = await appDb.ReviewLikes
             .Where(rl => rl.UserId == userId)
@@ -402,9 +397,9 @@ public class ReviewService(
 
         logger.LogInformation("Liked reviews for {UserId} retrieved: {Count} reviews", userId, likedReviews.Count);
 
-        return likedReviews;
+        return likedReviews.ToPaginatedResult(pagination);
     }
-    public async Task<IEnumerable<ExploreReviewDto>> GetMyReviewsAsync(string userId)
+    public async Task<PaginatedResult<ExploreReviewDto>> GetMyReviewsAsync(string userId, PaginationParams pagination)
     {
         var myReviews = await appDb.Reviews
             .Where(r => r.UserId == userId)
@@ -452,6 +447,6 @@ public class ReviewService(
 
         logger.LogInformation("My reviews fetched for {UserId}: {Count} reviews", userId, result.Count);
 
-        return result;
+        return result.ToPaginatedResult(pagination);
     }
 }

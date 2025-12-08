@@ -246,6 +246,10 @@ Property Configuration:
 ### Recommendations
 - `RecommendationDto(Name, Address, Latitude?, Longitude?, Source, LocalPlaceId?)`
 
+### Pagination
+- `PaginationParams(PageNumber=1, PageSize=20)` - Max PageSize 50
+- `PaginatedResult<T>(Items[], TotalCount, PageNumber, PageSize, TotalPages)`
+
 ---
 ## 8. Services (Service Layer Architecture)
 
@@ -335,21 +339,21 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | ------ | ------------------------------------------------ | ---- | ---------------- | ------------ | ----------------------------------------- |
 | POST   | /api/Events/create                               | A    | `CreateEventDto` | `EventDto`   | Validates times (future, duration ≥15m)   |
 | GET    | /api/Events/{id}                                 | A    | —                | `EventDto`   | Loads attendees + creator                 |
-| GET    | /api/Events/mine                                 | A    | —                | `EventDto[]` | Events created by requester               |
-| GET    | /api/Events/attending                            | A    | —                | `EventDto[]` | Where user is attendee                    |
+| GET    | /api/Events/mine (Q: pageNumber, pageSize)       | A    | —                | `PaginatedResult<EventDto>` | Events created by requester               |
+| GET    | /api/Events/attending (Q: pageNumber, pageSize)  | A    | —                | `PaginatedResult<EventDto>` | Where user is attendee                    |
 | POST   | /api/Events/{id}/attend                          | A    | —                | 200          | Prevents attending own event & duplicates |
 | POST   | /api/Events/{id}/leave                           | A    | —                | 200          | Removes attendee row                      |
 | DELETE | /api/Events/{id}                                 | A    | —                | 200          | Only creator                              |
 | PATCH  | /api/Events/{id}                                 | A    | `UpdateEventDto` | 200          | Partial updates                           |
-| GET    | /api/Events/public (Q: from,to,lat,lng,radiusKm) | A    | —                | `EventDto[]` | Bounding box geo filter + upcoming only   |
+| GET    | /api/Events/public (Q: from,to,lat,lng,radiusKm, pageNumber, pageSize) | A    | —                | `PaginatedResult<EventDto>` | Bounding box geo filter + upcoming only   |
 
 ### FriendsController (`/api/Friends`)
 | Method | Route                          | Auth | Body | Returns              | Notes                                                    |
 | ------ | ------------------------------ | ---- | ---- | -------------------- | -------------------------------------------------------- |
-| GET    | /api/Friends/friends           | A    | —    | `FriendSummaryDto[]` | Accepted friendships only                                |
+| GET    | /api/Friends/friends (Q: pageNumber, pageSize) | A    | —    | `PaginatedResult<FriendSummaryDto>` | Accepted friendships only                                |
 | POST   | /api/Friends/add/{username}    | A    | —    | 200                  | Creates Pending request if no existing relations         |
 | POST   | /api/Friends/accept/{username} | A    | —    | 200                  | Converts Pending to Accepted + adds reverse Accepted row |
-| POST   | /api/Friends/requests/incoming | A    | —    | `FriendSummaryDto[]` | Pending where current user is FriendId                   |
+| POST   | /api/Friends/requests/incoming (Q: pageNumber, pageSize) | A    | —    | `PaginatedResult<FriendSummaryDto>` | Pending where current user is FriendId                   |
 | POST   | /api/Friends/remove/{username} | A    | —    | 200                  | Deletes both Accepted rows                               |
 
 ### PlacesController (`/api/places`)
@@ -357,10 +361,10 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | ------ | ---------------------------------------------------------------------------------- | ---- | ---------------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
 | POST   | /api/places                                                                        | A    | `UpsertPlaceDto` | `PlaceDetailsDto`   | Daily per-user creation limit (10); Verified type requires address; Private/Friends auto-converted to Custom    |
 | GET    | /api/places/{id}                                                                   | A    | —                | `PlaceDetailsDto`   | Respects visibility: Private (owner only), Friends (owner + friends), Public (all)                              |
-| GET    | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind,visibility,type) | A    | —                | `PlaceDetailsDto[]` | Geo-search with optional filters: visibility (Public/Private/Friends), type (Verified/Custom), activity filters |
+| GET    | /api/places/nearby (Q: lat,lng,radiusKm,activityName,activityKind,visibility,type, pageNumber, pageSize) | A    | —                | `PaginatedResult<PlaceDetailsDto>` | Geo-search with optional filters: visibility (Public/Private/Friends), type (Verified/Custom), activity filters |
 | POST   | /api/places/favorited/{id}                                                         | A    | —                | 200 OK              | Adds place to favorites; prevents duplicates, validates place exists                                            |
 | DELETE | /api/places/favorited/{id}                                                         | A    | —                | 204 NoContent       | Removes place from favorites; idempotent                                                                        |
-| GET    | /api/places/favorited                                                              | A    | —                | `PlaceDetailsDto[]` | Returns all favorited places with activities                                                                    |
+| GET    | /api/places/favorited (Q: pageNumber, pageSize)                                    | A    | —                | `PaginatedResult<PlaceDetailsDto>` | Returns all favorited places with activities                                                                    |
 
 ### ProfilesController (`/api/profiles`)
 | Method | Route                          | Auth | Body | Returns              | Notes                                               |
@@ -372,11 +376,12 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | Method | Route                                                      | Auth | Body                      | Returns              | Notes                                              |
 | ------ | ---------------------------------------------------------- | ---- | ------------------------- | -------------------- | -------------------------------------------------- |
 | POST   | /api/reviews/{placeActivityId}                             | A    | `CreateReviewDto`         | `ReviewDto`          | Creates review for activity                        |
-| GET    | /api/reviews/{placeActivityId}?scope={mine/friends/global} | A    | —                         | `UserReviewsDto[]`   | Returns reviews grouped by user (Review + History) |
-| GET    | /api/reviews/explore                                       | A    | `ExploreReviewsFilterDto` | `ExploreReviewDto[]` | Paginated review feed with filters                 |
+| GET    | /api/reviews/{placeActivityId}?scope={mine/friends/global}&pageNumber&pageSize | A    | —                         | `PaginatedResult<UserReviewsDto>`   | Returns reviews grouped by user (Review + History) |
+| GET    | /api/reviews/explore                                       | A    | `ExploreReviewsFilterDto` | `PaginatedResult<ExploreReviewDto>` | Paginated review feed with filters                 |
 | POST   | /api/reviews/{reviewId}/like                               | A    | —                         | 200 OK               | Like a review (idempotent)                         |
 | DELETE | /api/reviews/{reviewId}/like                               | A    | —                         | 204 NoContent        | Unlike a review (idempotent)                       |
-| GET    | /api/reviews/liked                                         | A    | —                         | `ExploreReviewDto[]` | User's liked reviews                               |
+| GET    | /api/reviews/liked (Q: pageNumber, pageSize)               | A    | —                         | `PaginatedResult<ExploreReviewDto>` | User's liked reviews                               |
+| GET    | /api/reviews/my-reviews (Q: pageNumber, pageSize)          | A    | —                         | `PaginatedResult<ExploreReviewDto>` | User's own reviews                                 |
 
 ### TagsController (`/api/tags`)
 | Method | Route                                        | Auth | Body | Returns     | Notes                        |
@@ -705,7 +710,7 @@ All errors follow the ProblemDetails format:
 
 **Medium Priority:**
 - Email service for password reset (production)
-- Pagination improvements for large list endpoints
+- ✅ ~~Pagination improvements for large list endpoints~~ - COMPLETED
 - WebSocket support for real-time event updates
 - Profile picture upload functionality
 

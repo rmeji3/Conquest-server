@@ -1,4 +1,5 @@
-﻿using Conquest.Dtos.Friends;
+﻿using Conquest.Dtos.Common;
+using Conquest.Dtos.Friends;
 using Conquest.Services.Friends;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,12 +12,15 @@ namespace Conquest.Controllers
     {
         [Authorize]
         [HttpGet("friends")]
-        public async Task<IActionResult> GetMyFriends()
+        public async Task<ActionResult<PaginatedResult<FriendSummaryDto>>> GetMyFriends(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null) return Unauthorized();
 
-            var friends = await friendService.GetMyFriendsAsync(userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var friends = await friendService.GetMyFriendsAsync(userId, pagination);
             return Ok(friends);
         }
 
@@ -66,12 +70,15 @@ namespace Conquest.Controllers
 
         [Authorize]
         [HttpPost("requests/incoming")]
-        public async Task<IActionResult> GetIncomingRequests()
+        public async Task<ActionResult<PaginatedResult<FriendSummaryDto>>> GetIncomingRequests(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null) return Unauthorized();
 
-            var requests = await friendService.GetIncomingRequestsAsync(userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var requests = await friendService.GetIncomingRequestsAsync(userId, pagination);
             return Ok(requests);
         }
 

@@ -1,7 +1,9 @@
 using Conquest.Data.App;
 using Conquest.Dtos.Activities;
+using Conquest.Dtos.Common;
 using Conquest.Dtos.Places;
 using Conquest.Models.Places;
+using Conquest.Utils;
 using Conquest.Models.Reviews;
 using Conquest.Services.Friends;
 using Conquest.Services.Google;
@@ -216,7 +218,7 @@ public class PlaceService(
     }
 
 
-    public async Task<IEnumerable<PlaceDetailsDto>> SearchNearbyAsync(
+    public async Task<PaginatedResult<PlaceDetailsDto>> SearchNearbyAsync(
         double lat,
         double lng,
         double radiusKm,
@@ -224,7 +226,8 @@ public class PlaceService(
         string? activityKind,
         PlaceVisibility? visibility,
         PlaceType? type,
-        string? userId
+        string? userId,
+        PaginationParams pagination
     )
     {
         logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}, vis={Vis}, type={Type}", lat, lng, radiusKm, visibility, type);
@@ -288,13 +291,14 @@ public class PlaceService(
             withDistance.Add((dto, dist));
         }
 
-        return withDistance
+        var sorted = withDistance
             .OrderBy(x => x.Distance)
-            .Select(x => x.Dto)
-            .ToList();
+            .Select(x => x.Dto);
+
+        return sorted.ToPaginatedResult(pagination);
     }
 
-    public async Task<IEnumerable<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId)
+    public async Task<PaginatedResult<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId, PaginationParams pagination)
     {
         var favorites = await db.Favorited
             .Where(f => f.UserId == userId)
@@ -329,7 +333,7 @@ public class PlaceService(
             }
         }
 
-        return list;
+        return list.ToPaginatedResult(pagination);
     }
 
     // this will soft delete the place by setting IsDeleted to true

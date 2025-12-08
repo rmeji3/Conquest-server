@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Conquest.Dtos.Common;
 using Conquest.Dtos.Events;
 using Conquest.Services.Events;
 using Microsoft.AspNetCore.Authorization;
@@ -38,34 +39,42 @@ namespace Conquest.Controllers.Events
             return Ok(result);
         }
 
-        // GET /api/events/mine
+        // GET /api/events/mine?pageNumber=1&pageSize=20
         [HttpGet("mine")]
-        public async Task<ActionResult<List<EventDto>>> GetMyEvents()
+        public async Task<ActionResult<PaginatedResult<EventDto>>> GetMyEvents(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null) return Unauthorized();
 
-            var result = await eventService.GetMyEventsAsync(userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await eventService.GetMyEventsAsync(userId, pagination);
             return Ok(result);
         }
 
-        // GET /api/events/attending
+        // GET /api/events/attending?pageNumber=1&pageSize=20
         [HttpGet("attending")]
-        public async Task<ActionResult<List<EventDto>>> GetEventsAttending()
+        public async Task<ActionResult<PaginatedResult<EventDto>>> GetEventsAttending(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null) return Unauthorized();
 
-            var result = await eventService.GetEventsAttendingAsync(userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await eventService.GetEventsAttendingAsync(userId, pagination);
             return Ok(result);
         }
 
-        // GET /api/events/public
+        // GET /api/events/public?lat=..&lng=..&radiusKm=..&pageNumber=..&pageSize=..
         [HttpGet("public")]
-        public async Task<ActionResult<List<EventDto>>> GetPublicEvents(
+        public async Task<ActionResult<PaginatedResult<EventDto>>> GetPublicEvents(
             [FromQuery] double? lat,
             [FromQuery] double? lng,
-            [FromQuery] double? radiusKm)
+            [FromQuery] double? radiusKm,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             if (!lat.HasValue || !lng.HasValue || !radiusKm.HasValue || radiusKm <= 0)
             {
@@ -77,12 +86,14 @@ namespace Conquest.Controllers.Events
             var radius = radiusKm.Value;
             var latDelta = radius / 111.32;
             var lngDelta = radius / (111.32 * Math.Cos(centerLat * Math.PI / 180.0));
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
 
             var result = await eventService.GetPublicEventsAsync(
                 centerLat - latDelta,
                 centerLat + latDelta,
                 centerLng - lngDelta,
-                centerLng + lngDelta
+                centerLng + lngDelta,
+                pagination
             );
 
             return Ok(result);

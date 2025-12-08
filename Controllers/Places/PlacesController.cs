@@ -1,4 +1,5 @@
 ﻿using Conquest.Dtos.Activities;
+using Conquest.Dtos.Common;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Conquest.Controllers.Places
@@ -54,17 +55,20 @@ namespace Conquest.Controllers.Places
 
         // GET /api/places/nearby?lat=..&lng=..&radiusKm=5&activityName=soccer&activityKind=outdoor&visibility=Public&type=Verified
         [HttpGet("nearby")]
-        public async Task<ActionResult<IEnumerable<PlaceDetailsDto>>> Nearby(
+        public async Task<ActionResult<PaginatedResult<PlaceDetailsDto>>> Nearby(
             [FromQuery] double lat,
             [FromQuery] double lng,
             [FromQuery] double radiusKm = 5,
             [FromQuery] string? activityName = null,
             [FromQuery] string? activityKind = null,
             [FromQuery] PlaceVisibility? visibility = null,
-            [FromQuery] PlaceType? type = null)
+            [FromQuery] PlaceType? type = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await placeService.SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, visibility, type, userId);
+            var result = await placeService.SearchNearbyAsync(lat, lng, radiusKm, activityName, activityKind, visibility, type, userId, pagination);
             return Ok(result);
         }
 
@@ -99,15 +103,18 @@ namespace Conquest.Controllers.Places
             return NoContent();
         }
 
-        // GET /api/places/favorited
+        // GET /api/places/favorited?pageNumber=1&pageSize=20
         [HttpGet("favorited")]
-        public async Task<ActionResult<IEnumerable<PlaceDetailsDto>>> GetFavorited()
+        public async Task<ActionResult<PaginatedResult<PlaceDetailsDto>>> GetFavorited(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId is null)
                 return Unauthorized("You must be logged in to view favorited places.");
 
-            var result = await placeService.GetFavoritedPlacesAsync(userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await placeService.GetFavoritedPlacesAsync(userId, pagination);
             return Ok(result);
         }
 

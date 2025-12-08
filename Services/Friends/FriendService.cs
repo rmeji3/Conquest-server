@@ -1,7 +1,9 @@
 using Conquest.Data.Auth;
+using Conquest.Dtos.Common;
 using Conquest.Dtos.Friends;
 using Conquest.Models.AppUsers;
 using Conquest.Models.Friends;
+using Conquest.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -23,9 +25,9 @@ public class FriendService(
             .ToListAsync();
     }
 
-    public async Task<List<FriendSummaryDto>> GetMyFriendsAsync(string userId)
+    public async Task<PaginatedResult<FriendSummaryDto>> GetMyFriendsAsync(string userId, PaginationParams pagination)
     {
-        return await authDb.Friendships
+        var query = authDb.Friendships
             .AsNoTracking()
             .Where(f => f.UserId == userId && f.Status == Friendship.FriendshipStatus.Accepted)
             .Select(f => new FriendSummaryDto
@@ -35,8 +37,9 @@ public class FriendService(
                 FirstName = f.Friend.FirstName,
                 LastName = f.Friend.LastName,
                 ProfileImageUrl = f.Friend.ProfileImageUrl
-            })
-            .ToListAsync();
+            });
+
+        return await query.ToPaginatedResultAsync(pagination);
     }
 
     public async Task<string> AddFriendAsync(string userId, string friendUsername)
@@ -160,9 +163,9 @@ public class FriendService(
         return "Friend request accepted.";
     }
 
-    public async Task<List<FriendSummaryDto>> GetIncomingRequestsAsync(string userId)
+    public async Task<PaginatedResult<FriendSummaryDto>> GetIncomingRequestsAsync(string userId, PaginationParams pagination)
     {
-        return await authDb.Friendships
+        var query = authDb.Friendships
             .AsNoTracking()
             .Where(f => f.FriendId == userId && f.Status == Friendship.FriendshipStatus.Pending)
             .Select(f => new FriendSummaryDto
@@ -171,8 +174,9 @@ public class FriendService(
                 UserName = f.User.UserName!,
                 FirstName = f.User.FirstName,
                 LastName = f.User.LastName
-            })
-            .ToListAsync();
+            });
+
+        return await query.ToPaginatedResultAsync(pagination);
     }
 
     public async Task<string> RemoveFriendAsync(string userId, string friendUsername)

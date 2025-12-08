@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Conquest.Dtos.Reviews;
 using Conquest.Services.Reviews;
 using Microsoft.AspNetCore.Mvc;
+using Conquest.Dtos.Common;
 
 namespace Conquest.Controllers.Reviews;
 
@@ -37,10 +38,12 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
     }
     
 
-    // GET /api/activities/{placeActivityId}/reviews?scope=mine|global|friends
+    // GET /api/activities/{placeActivityId}/reviews?scope=mine|global|friends&pageNumber=1&pageSize=20
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<UserReviewsDto>>> GetReviews(int placeActivityId,
-        [FromQuery] string scope = "global")
+    public async Task<ActionResult<PaginatedResult<UserReviewsDto>>> GetReviews(int placeActivityId,
+        [FromQuery] string scope = "global",
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
@@ -51,7 +54,8 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
         
         try
         {
-            var result = await reviewService.GetReviewsAsync(placeActivityId, scope, userId);
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await reviewService.GetReviewsAsync(placeActivityId, scope, userId, pagination);
             logger.LogInformation("GetReviews: Reviews fetched for Activity {PlaceActivityId} by {UserName}. Scope: {Scope}", placeActivityId, userId, scope);
             return Ok(result);
         }
@@ -64,11 +68,14 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
 
     // GET /api/reviews/explore
     [HttpGet("/api/reviews/explore")]
-    public async Task<ActionResult<IEnumerable<ExploreReviewDto>>> GetExploreReviews(
-        [FromQuery] ExploreReviewsFilterDto filter)
+    public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetExploreReviews(
+        [FromQuery] ExploreReviewsFilterDto filter,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
     {
+        var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var reviews = await reviewService.GetExploreReviewsAsync(filter, userId);
+        var reviews = await reviewService.GetExploreReviewsAsync(filter, userId, pagination);
         return Ok(reviews);
     }
 
@@ -120,9 +127,11 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
         }
     }
 
-    // GET /api/reviews/liked
+    // GET /api/reviews/liked?pageNumber=1&pageSize=20
     [HttpGet("/api/reviews/liked")]
-    public async Task<ActionResult<IEnumerable<ExploreReviewDto>>> GetLikedReviews()
+    public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetLikedReviews(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
@@ -131,14 +140,17 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
             return Unauthorized();
         }
 
-        var reviews = await reviewService.GetLikedReviewsAsync(userId);
+        var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+        var reviews = await reviewService.GetLikedReviewsAsync(userId, pagination);
         logger.LogInformation("GetLikedReviews: Liked reviews fetched for {UserId}", userId);
         return Ok(reviews);
     }
 
-    // GET /api/reviews/me
+    // GET /api/reviews/me?pageNumber=1&pageSize=20
     [HttpGet("/api/reviews/me")]
-    public async Task<ActionResult<IEnumerable<ExploreReviewDto>>> GetMyReviews()
+    public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetMyReviews(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
@@ -147,7 +159,8 @@ public class ReviewsController(IReviewService reviewService, ILogger<ReviewsCont
             return Unauthorized();
         }
 
-        var reviews = await reviewService.GetMyReviewsAsync(userId);
+        var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+        var reviews = await reviewService.GetMyReviewsAsync(userId, pagination);
         logger.LogInformation("GetMyReviews: Reviews fetched for {UserId}", userId);
         return Ok(reviews);
     }

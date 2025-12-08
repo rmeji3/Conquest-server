@@ -1,8 +1,10 @@
 using Conquest.Data.App;
 using Conquest.Data.Auth;
+using Conquest.Dtos.Common;
 using Conquest.Dtos.Events;
 using Conquest.Models.AppUsers;
 using Conquest.Models.Events;
+using Conquest.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -104,44 +106,40 @@ public class EventService(
     // Actually, looking at my interface: GetEventByIdAsync(int id).
     // I'll return "unknown" for status.
     
-    public async Task<List<EventDto>> GetMyEventsAsync(string userId)
+    public async Task<PaginatedResult<EventDto>> GetMyEventsAsync(string userId, PaginationParams pagination)
     {
-        var events = await appDb.Events
+        var query = appDb.Events
             .Include(e => e.Attendees)
             .Where(e => e.CreatedById == userId)
-            .OrderByDescending(e => e.StartTime)
-            .ToListAsync();
+            .OrderByDescending(e => e.StartTime);
 
-        return await MapEventsBatchAsync(events, userId);
+        return await MapEventsBatchAsync(query, userId, pagination);
     }
 
-    public async Task<List<EventDto>> GetEventsAttendingAsync(string userId)
+    public async Task<PaginatedResult<EventDto>> GetEventsAttendingAsync(string userId, PaginationParams pagination)
     {
-        var eventIds = await appDb.EventAttendees
+        var eventIdsQuery = appDb.EventAttendees
             .Where(a => a.UserId == userId)
-            .Select(a => a.EventId)
-            .ToListAsync();
+            .Select(a => a.EventId);
 
-        var events = await appDb.Events
+        var query = appDb.Events
             .Include(e => e.Attendees)
-            .Where(e => eventIds.Contains(e.Id))
-            .OrderByDescending(e => e.StartTime)
-            .ToListAsync();
+            .Where(e => eventIdsQuery.Contains(e.Id))
+            .OrderByDescending(e => e.StartTime);
 
-        return await MapEventsBatchAsync(events, userId);
+        return await MapEventsBatchAsync(query, userId, pagination);
     }
 
-    public async Task<List<EventDto>> GetPublicEventsAsync(double minLat, double maxLat, double minLng, double maxLng)
+    public async Task<PaginatedResult<EventDto>> GetPublicEventsAsync(double minLat, double maxLat, double minLng, double maxLng, PaginationParams pagination)
     {
-        var events = await appDb.Events
+        var query = appDb.Events
             .Include(e => e.Attendees)
             .Where(e => e.IsPublic)
             .Where(e => e.Latitude >= minLat && e.Latitude <= maxLat &&
                         e.Longitude >= minLng && e.Longitude <= maxLng)
-            .OrderBy(e => e.StartTime)
-            .ToListAsync();
+            .OrderBy(e => e.StartTime);
 
-        return await MapEventsBatchAsync(events, null);
+        return await MapEventsBatchAsync(query, null, pagination);
     }
 
     public async Task<bool> DeleteEventAsync(int id, string userId)
@@ -186,11 +184,18 @@ public class EventService(
         return true;
     }
 
-    private async Task<List<EventDto>> MapEventsBatchAsync(List<Event> events, string? currentUserId)
+    private async Task<PaginatedResult<EventDto>> MapEventsBatchAsync(IQueryable<Event> query, string? currentUserId, PaginationParams pagination)
     {
-        if (!events.Any()) return new List<EventDto>();
+        // 1. Get Count and Page Items
+        var count = await query.CountAsync();
+        var events = await query
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
+            .ToListAsync();
 
-        // 1. Collect all user IDs (creators + attendees)
+        if (!events.Any()) return new PaginatedResult<EventDto>(new List<EventDto>(), count, pagination.PageNumber, pagination.PageSize);
+
+        // 2. Collect all user IDs (creators + attendees)
         var userIds = new HashSet<string>();
         foreach (var e in events)
         {
@@ -198,14 +203,14 @@ public class EventService(
             foreach (var a in e.Attendees) userIds.Add(a.UserId);
         }
 
-        // 2. Fetch all users in one query
+        // 3. Fetch all users in one query
         var users = await userManager.Users
             .Where(u => userIds.Contains(u.Id))
             .ToListAsync();
         
         var usersById = users.ToDictionary(u => u.Id);
 
-        // 3. Map
+        // 4. Map
         var dtos = new List<EventDto>();
         foreach (var ev in events)
         {
@@ -218,6 +223,6 @@ public class EventService(
             dtos.Add(EventMapper.MapToDto(ev, creatorSummary, usersById, currentUserId));
         }
 
-        return dtos;
+        return new PaginatedResult<EventDto>(dtos, count, pagination.PageNumber, pagination.PageSize);
     }
 }
