@@ -8,6 +8,7 @@ using Conquest.Dtos.Places;
 using Conquest.Dtos.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Conquest.Models.AppUsers;
 
 namespace Conquest.Controllers.Profiles;
 

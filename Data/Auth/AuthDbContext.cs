@@ -10,6 +10,7 @@ namespace Conquest.Data.Auth
     {
         public DbSet<Friendship> Friendships => Set<Friendship>();
         public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
+        public DbSet<IpBan> IpBans => Set<IpBan>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

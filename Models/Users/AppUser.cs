@@ -14,6 +14,13 @@ namespace Conquest.Models.AppUsers
         public PrivacyConstraint ReviewsPrivacy { get; set; } = PrivacyConstraint.Public;
         public PrivacyConstraint PlacesPrivacy { get; set; } = PrivacyConstraint.Public;
         public PrivacyConstraint LikesPrivacy { get; set; } = PrivacyConstraint.Public;
+
+        // Banning / Moderation
+        public bool IsBanned { get; set; }
+        public int BanCount { get; set; }
+        [MaxLength(45)] // IPv6 max length
+        public string? LastIpAddress { get; set; }
+        public string? BanReason { get; set; }
     }
 
     public enum PrivacyConstraint

@@ -14,6 +14,7 @@ using Conquest.Services.Activities;
 using Conquest.Services.Profiles;
 using Conquest.Services.Auth;
 using Conquest.Services.Reports;
+using Conquest.Services.Moderation;
 using Conquest.Services.Blocks;
 using Conquest.Services.Redis;
 using Conquest.Services.Google;
@@ -154,6 +155,7 @@ builder.Services.AddScoped<IPlaceNameService, GooglePlacesService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IBlockService, BlockService>();
 builder.Services.AddScoped<IBusinessService, BusinessService>();
+builder.Services.AddScoped<IBanningService, BanningService>();
 
 // --- AWS S3 & Storage ---
 var awsOptions = builder.Configuration.GetAWSOptions();
@@ -214,6 +216,7 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddTransient<Conquest.Middleware.GlobalExceptionHandler>();
 builder.Services.AddScoped<Conquest.Middleware.RateLimitMiddleware>();
+builder.Services.AddScoped<Conquest.Middleware.BanningMiddleware>();
 builder.Services.AddSwaggerGen(o =>
 {
     o.SwaggerDoc("v1", new OpenApiInfo { Title = "Conquest API", Version = "v1" });
@@ -283,9 +286,10 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseRouting();
-app.UseMiddleware<Conquest.Middleware.RateLimitMiddleware>();
 app.UseSession();
 app.UseAuthentication();
+app.UseMiddleware<Conquest.Middleware.BanningMiddleware>();
+app.UseMiddleware<Conquest.Middleware.RateLimitMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

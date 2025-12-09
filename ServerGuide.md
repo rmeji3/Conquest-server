@@ -60,8 +60,8 @@ Registered services:
 - JWT options bound from `configuration["Jwt"]` (Key, Issuer, Audience, AccessTokenMinutes).
 - **Redis**: `IConnectionMultiplexer` (singleton), distributed cache, `IRedisService` (scoped).
 - **Session**: Distributed session state with Redis backend (30-minute timeout).
-- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IPlaceNameService` (Google Places API), `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IBlockService`, `IProfileService`, `IAuthService`, `IRedisService`, `IModerationService`, `ISemanticService`, `ITagService`, `RecommendationService`.
-- **Middleware**: `GlobalExceptionHandler` (transient), `RateLimitMiddleware` (scoped).
+- **Service Layer** (all scoped): `ITokenService`, `IPlaceService`, `IPlaceNameService` (Google Places API), `IEventService`, `IReviewService`, `IActivityService`, `IFriendService`, `IBlockService`, `IProfileService`, `IAuthService`, `IRedisService`, `IModerationService`, `ISemanticService`, `ITagService`, `RecommendationService`, `IBanningService`.
+- **Middleware**: `GlobalExceptionHandler` (transient), `RateLimitMiddleware` (scoped), `BanningMiddleware` (scoped).
 - Authentication: JWT Bearer with validation (issuer, audience, lifetime, signing key).
 - Swagger with Bearer security scheme.
 - Auto migration is performed for both contexts at startup inside a scope.
@@ -71,12 +71,13 @@ Pipeline order:
 1. Global Exception Handler
 2. Swagger + UI at root
 3. Routing
-4. **Rate Limiting Middleware**
-5. **Session Middleware**
-6. Authentication
-7. Authorization
-8. Static files
-9. Controller endpoints via `app.MapControllers()`
+4. **Session Middleware**
+5. Authentication
+6. **Banning Middleware**
+7. **Rate Limiting Middleware**
+8. Authorization
+9. Static files
+10. Controller endpoints via `app.MapControllers()`
 
 ### 3.1. Configuration Reference
 
@@ -121,7 +122,7 @@ Required `appsettings.json` keys:
 ---
 ## 4. Authentication & Authorization
 ### Identity
-- `AppUser : IdentityUser` adds: `FirstName`, `LastName`, `ProfileImageUrl`.
+- `AppUser : IdentityUser` adds: `FirstName`, `LastName`, `ProfileImageUrl`, `IsBanned`, `BanCount`, `LastIpAddress`, `BanReason`.
 - Unique index on `UserName` enforced in `AuthDbContext`.
 - Roles: `Admin`, `User`, `Business`.
 
@@ -132,7 +133,7 @@ Required `appsettings.json` keys:
 
 ### Password Flows
 - Register: validates uniqueness of normalized `UserName` manually.
-- Login: email + password; uses `CheckPasswordSignInAsync` with lockout.
+- Login: email + password; uses `CheckPasswordSignInAsync` with lockout. Checks `IsBanned` and returns 403 if banned.
 - Forgot Password: generates identity reset token, returns encoded version in DEV.
 - Reset Password: base64url decode then `ResetPasswordAsync`.
 - Change Password: requires existing password & JWT auth.
@@ -147,6 +148,7 @@ Required `appsettings.json` keys:
 DbSets:
 - `Friendships` (composite PK: `{UserId, FriendId}`)
 - `UserBlocks` (composite PK: `{BlockerId, BlockedId}`)
+- `IpBans` (PK: `IpAddress`)
 Relationships:
 - `Friendship.User` and `Friendship.Friend` each `Restrict` delete.
 - `UserBlock.Blocker` and `UserBlock.Blocked` each `Cascade` delete.
@@ -187,7 +189,8 @@ Property Configuration:
 ## 6. Domain Models (Summaries)
 | Entity        | Key                | Core Fields                                                                                                              | Navigation                             | Notes                                                                                                                 |
 | ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl                                                                                     | (Friends)                              | Stored in Auth DB                                                                                                     |
+| AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason                       |(Friends)                              | Stored in Auth DB                                                                                                     |
+| IpBan         | IpAddress          | Reason, CreatedAt, ExpiresAt                                                                                             | (None)                                 | Stores banned IPs                                                                                                     |
 | Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
 | Place         | Id                 | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
 | Favorited     | Id                 | UserId, PlaceId                                                                                                          | Place                                  | Unique per user per place; cascade deletes with Place                                                                 |
@@ -338,6 +341,10 @@ Property Configuration:
 #### BusinessService (`IBusinessService`)
 - Manages place claim requests.
 - **Methods**: `SubmitClaimAsync`, `GetPendingClaimsAsync`, `ApproveClaimAsync` (Transfers ownership + adds Role), `RejectClaimAsync`.
+- **BanningService** (`IBanningService`):
+  - Manages User and IP bans.
+  - Integration with Redis for fast middleware checks.
+  - Support for temporary or permanent IP bans.
 
 ---
 ## 9. Controllers & Endpoints
@@ -450,6 +457,14 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | Method | Route                                            | Auth | Body | Returns               | Notes                                   |
 | ------ | ------------------------------------------------ | ---- | ---- | --------------------- | --------------------------------------- |
 | GET    | /api/recommendations (Q: vibe, lat, lng, radius) | A    | —    | `RecommendationDto[]` | AI-powered search. Radius default 10km. |
+ 
+### ModerationController (`/api/moderation`)
+| Method | Route                       | Auth | Body | Returns     | Notes                        |
+| ------ | --------------------------- | ---- | ---- | ----------- | ---------------------------- |
+| POST   | /api/moderation/ban/user/{id} | Adm | (Q: reason) | 200 | Sets IsBanned, checks limit |
+| POST   | /api/moderation/unban/user/{id} | Adm | — | 200 | Unbans user |
+| POST   | /api/moderation/ban/ip      | Adm | `IpBanRequest` | 200 | Bans IP (Redis + DB) |
+| POST   | /api/moderation/unban/ip    | Adm | `IpUnbanRequest` | 200 | Unbans IP |
 
 ---
 ## 10. Validation & Business Rules

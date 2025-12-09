@@ -57,6 +57,13 @@ public class AuthService(
             throw new UnauthorizedAccessException("Invalid credentials.");
         }
 
+        if (user.IsBanned)
+        {
+             logger.LogWarning("Login failed: User '{Email}' is banned.", dto.Email);
+             var msg = string.IsNullOrWhiteSpace(user.BanReason) ? "Your account has been banned." : $"Your account has been banned: {user.BanReason}";
+             throw new UnauthorizedAccessException(msg);
+        }
+
         var result = await signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {

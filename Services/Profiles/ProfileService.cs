@@ -16,7 +16,6 @@ using Conquest.Dtos.Events; // Logic for events
 using Conquest.Services.Events; // For EventMapper
 using Conquest.Dtos.Common; // For PaginationParams, PaginatedResult
 using Conquest.Services.Profiles;
-using DtoPrivacy = Conquest.Dtos.Profiles.PrivacyConstraint; // Alias for DTO enum
 using AppUserPrivacy = Conquest.Models.AppUsers.PrivacyConstraint; // Alias for Model enum
 
 using Conquest.Services.Blocks;
@@ -122,9 +121,9 @@ public class ProfileService(
                 0, // PlaceVisitCount
                 0, // EventCount
                 false, // IsFriends
-                (DtoPrivacy)u.ReviewsPrivacy,
-                (DtoPrivacy)u.PlacesPrivacy,
-                (DtoPrivacy)u.LikesPrivacy
+                u.ReviewsPrivacy,
+                u.PlacesPrivacy,
+                u.LikesPrivacy
             ))
             .ToListAsync();
 
@@ -407,9 +406,9 @@ public class ProfileService(
             placeVisitCount,
             eventCount,
             isFriend,
-            (DtoPrivacy)user.ReviewsPrivacy,
-            (DtoPrivacy)user.PlacesPrivacy,
-            (DtoPrivacy)user.LikesPrivacy
+            user.ReviewsPrivacy,
+            user.PlacesPrivacy,
+            user.LikesPrivacy
         );
     }
 
@@ -469,9 +468,9 @@ public class ProfileService(
             placeVisitCount,
             eventCount,
             isFriend,
-            (DtoPrivacy)user.ReviewsPrivacy,
-            (DtoPrivacy)user.PlacesPrivacy,
-            (DtoPrivacy)user.LikesPrivacy
+            user.ReviewsPrivacy,
+            user.PlacesPrivacy,
+            user.LikesPrivacy
         );
     }
     public async Task<PaginatedResult<PlaceDetailsDto>> GetUserPlacesAsync(string targetUserId, string currentUserId, PaginationParams pagination)
