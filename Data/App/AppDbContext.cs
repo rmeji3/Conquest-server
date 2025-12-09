@@ -3,6 +3,7 @@ using Conquest.Models.Events;
 using Conquest.Models.Places;
 using Microsoft.EntityFrameworkCore;
 using Conquest.Models.Reviews;
+using Conquest.Models.Reports;
 
 namespace Conquest.Data.App
 {
@@ -18,6 +19,7 @@ namespace Conquest.Data.App
         public DbSet<EventAttendee> EventAttendees => Set<EventAttendee>();
         public DbSet<Favorited> Favorited => Set<Favorited>();
         public DbSet<ReviewLike> ReviewLikes => Set<ReviewLike>();
+        public DbSet<Report> Reports => Set<Report>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

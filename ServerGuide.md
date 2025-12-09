@@ -195,6 +195,7 @@ Property Configuration:
 | Event         | Id                 | Title, Description?, IsPublic, StartTime, EndTime, Location, PlaceId?, CreatedById, CreatedAt, Latitude, Longitude                 | Attendees (EventAttendee), Place?      | Status computed dynamically; PlaceId links to Place entity (optional)                                                                 |
 | EventAttendee | (EventId, UserId)  | JoinedAt                                                                                                                 | Event                                  | Many-to-many join                                                                                                     |
 | Tag           | Id                 | Name, IsApproved, IsBanned, CanonicalTagId                                                                               | ReviewTags                             | Used for categorizing reviews                                                                                         |
+| Report        | Id                 | ReporterId, TargetId, TargetType, Reason, Description, Status, CreatedAt                                                 | (None - Polymorphic)                    | TargetId is string; TargetType enum (Place/Activity/Review/Profile); Status enum (Pending/Reviewed/Dismissed)         |
 
 ---
 ## 7. DTO Contracts
@@ -248,7 +249,12 @@ Property Configuration:
 
 ### Pagination
 - `PaginationParams(PageNumber=1, PageSize=20)` - Max PageSize 50
+- `PaginationParams(PageNumber=1, PageSize=20)` - Max PageSize 50
 - `PaginatedResult<T>(Items[], TotalCount, PageNumber, PageSize, TotalPages)`
+
+### Reporting
+- `CreateReportDto(TargetId, TargetType, Reason, Description?)` - TargetId is string.
+- `Report(Id, ReporterId, TargetId, TargetType, Reason, Description?, CreatedAt, Status)`
 
 ---
 ## 8. Services (Service Layer Architecture)
@@ -307,6 +313,11 @@ Property Configuration:
 - **Method**: `FindDuplicateAsync(newItem, existingItems)`.
 - **Backing**: OpenAI Chat Completion (GPT-3.5/4o).
 - **Purpose**: Identifies semantic duplicates for activity merging.
+
+#### ReportService (`IReportService`)
+- Manages reporting logic.
+- Methods: `CreateReportAsync` (User), `GetReportsAsync` (Admin).
+- **Polymorphism**: Handles reports for multiple target types (Place, Review, etc.).
 
 ---
 ## 9. Controllers & Endpoints
@@ -371,6 +382,12 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | ------ | ------------------------------ | ---- | ---- | -------------------- | --------------------------------------------------- |
 | GET    | /api/profiles/me               | A    | —    | `PersonalProfileDto` | Current user profile                                |
 | GET    | /api/profiles/search?username= | A    | —    | `ProfileDto[]`       | Prefix search on normalized username; excludes self |
+
+### ReportsController (`/api/reports`)
+| Method | Route           | Auth | Body               | Returns              | Notes                                               |
+| ------ | --------------- | ---- | ------------------ | -------------------- | --------------------------------------------------- |
+| POST   | /api/reports    | A    | `CreateReportDto`  | `Report`             | Polymorphic (TargetType enum). Returns 201.         |
+| GET    | /api/reports    | Adm  | —                  | `PaginatedResult`    | Admin only. Filters by status/page.                 |
 
 ### ReviewsController (`/api/reviews`)
 | Method | Route                                                      | Auth | Body                      | Returns              | Notes                                              |
@@ -657,6 +674,7 @@ Multi-layered rate limiting protects API from abuse and ensures fair resource al
 | Friends    | Add, Accept, List, Incoming, Remove                             |
 | Profiles   | Me, Search                                                      |
 | Reviews    | Create, List by scope, Like/Unlike, Explore Feed (with filters) |
+| Reports    | Create (User), View/Filter (Admin)                              |
 | Tags       | Search, Popular, Moderation                                     |
 
 ---
