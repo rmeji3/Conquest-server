@@ -61,5 +61,6 @@ public record PersonalProfileDto(
     [Required] string LastName,
     string? ProfilePictureUrl,
     [Required] string Email,
-    List<EventDto> Events
+    List<EventDto> Events,
+    string[] Roles
 );

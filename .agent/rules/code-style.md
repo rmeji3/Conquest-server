@@ -3,8 +3,13 @@ trigger: always_on
 ---
 
 # Copilot / Agent Project Instructions
-
 These instructions guide automated code assistance in this repository.
+
+# How to build
+- dotnet build Conquest-server.csproj
+
+# After every new feature or updating a feature:
+- generate a prompt to give the front end with context like endpoint changes, dtos, etc.
 
 ## Primary Context Source
 - Use `ServerGuide.md` for the authoritative description of architecture, endpoints, models, DTOs, services, and rules.

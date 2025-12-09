@@ -47,7 +47,8 @@
         string? DisplayName, 
         string FirstName, 
         string LastName,
-        string? ProfileImageUrl
+        string? ProfileImageUrl,
+        string[] Roles
     );
 
     public record AuthResponse(string AccessToken, DateTime ExpiresUtc, UserDto User);

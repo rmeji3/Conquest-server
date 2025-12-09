@@ -19,6 +19,7 @@ using Conquest.Services.Redis;
 using Conquest.Services.Google;
 using Conquest.Services.Recommendations;
 using Conquest.Services.Storage;
+using Conquest.Services;
 using Microsoft.SemanticKernel;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -152,6 +153,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPlaceNameService, GooglePlacesService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IBlockService, BlockService>();
+builder.Services.AddScoped<IBusinessService, BusinessService>();
 
 // --- AWS S3 & Storage ---
 var awsOptions = builder.Configuration.GetAWSOptions();
@@ -244,7 +246,7 @@ using (var scope = app.Services.CreateScope())
 
     // --- Seed Roles ---
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    string[] roleNames = { "Admin", "User" };
+    string[] roleNames = { "Admin", "User", "Business" };
     foreach (var roleName in roleNames)
     {
         if (!await roleManager.RoleExistsAsync(roleName))

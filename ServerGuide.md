@@ -123,7 +123,7 @@ Required `appsettings.json` keys:
 ### Identity
 - `AppUser : IdentityUser` adds: `FirstName`, `LastName`, `ProfileImageUrl`.
 - Unique index on `UserName` enforced in `AuthDbContext`.
-- Roles: `Admin`, `User`.
+- Roles: `Admin`, `User`, `Business`.
 
 ### JWT
 - Claims added: `sub`, `email`, `nameidentifier`, `name`, plus each role.
@@ -199,6 +199,7 @@ Property Configuration:
 | Tag           | Id                 | Name, IsApproved, IsBanned, CanonicalTagId                                                                               | ReviewTags                             | Used for categorizing reviews                                                                                         |
 | UserBlock     | (BlockerId, BlockedId) | CreatedAt                                                                                                                | Blocker, Blocked                       | Separation of concern for blocking users; masks content bidirectionally                                               |
 | Report        | Id                 | ReporterId, TargetId, TargetType, Reason, Description, Status, CreatedAt                                                 | (None - Polymorphic)                    | TargetId is string; TargetType enum (Place/Activity/Review/Profile/Bug); Status enum (Pending/Reviewed/Dismissed)         |
+| PlaceClaim    | Id                 | UserId, PlaceId, Proof, Status, CreatedUtc, ReviewedUtc, ReviewerId                                                      | Place                                  | Tracks ownership claim requests; Logic FK to User                                                                     |
 
 ---
 ## 7. DTO Contracts
@@ -214,7 +215,7 @@ Property Configuration:
 - `ForgotPasswordDto(Email)`
 - `ResetPasswordDto(Email, Token, NewPassword)`
 - `ChangePasswordDto(CurrentPassword, NewPassword)`
-- `UserDto(Id, Email, DisplayName, FirstName, LastName, ProfileImageUrl)`
+- `UserDto(Id, Email, DisplayName, FirstName, LastName, ProfileImageUrl, Roles[])`
 - `AuthResponse(AccessToken, ExpiresUtc, User)`
 - `JwtOptions(Key, Issuer, Audience, AccessTokenMinutes)`
 
@@ -232,11 +233,11 @@ Property Configuration:
 - `PlaceVisibility` enum: `Private = 0`, `Friends = 1`, `Public = 2`
 - `PlaceType` enum: `Custom = 0`, `Verified = 1`
 - `UpsertPlaceDto(Name, Address?, Latitude, Longitude, Visibility, Type)`
-- `PlaceDetailsDto(Id, Name, Address, Latitude, Longitude, Visibility, Type, IsOwner, IsFavorited, Favorites, Activities[ActivitySummaryDto], ActivityKinds[string])`
+- `PlaceDetailsDto(Id, Name, Address, Latitude, Longitude, Visibility, Type, IsOwner, IsFavorited, Favorites, Activities[ActivitySummaryDto], ActivityKinds[string], ClaimStatus?, IsClaimed)`
 
 ### Profiles
 - `ProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?)`
-- `PersonalProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?, Email)`
+- `PersonalProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl, Email, Events[], Roles[])`
 
 ### Reviews
 - `UserReviewsDto(Review, History[])` - Grouped response
@@ -259,6 +260,10 @@ Property Configuration:
 ### Reporting
 - `CreateReportDto(TargetId, TargetType, Reason, Description?)` - TargetId is string.
 - `Report(Id, ReporterId, TargetId, TargetType, Reason, Description?, CreatedAt, Status)`
+
+### Business & Claims
+- `CreateClaimDto(PlaceId, Proof)`
+- `ClaimDto(Id, PlaceId, PlaceName, UserId, UserName, Proof, Status, CreatedUtc, ReviewedUtc)`
 
 ---
 ## 8. Services (Service Layer Architecture)
@@ -330,6 +335,10 @@ Property Configuration:
 - Methods: `CreateReportAsync` (User), `GetReportsAsync` (Admin).
 - **Polymorphism**: Handles reports for multiple target types (Place, Review, etc.).
 
+#### BusinessService (`IBusinessService`)
+- Manages place claim requests.
+- **Methods**: `SubmitClaimAsync`, `GetPendingClaimsAsync`, `ApproveClaimAsync` (Transfers ownership + adds Role), `RejectClaimAsync`.
+
 ---
 ## 9. Controllers & Endpoints
 Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body. Auth: A=Requires JWT, An=AllowAnonymous, Adm=Admin Only.
@@ -362,6 +371,15 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | POST   | /api/blocks/{userId}        | A    | —    | 200 OK      | Blocks user, removes friendship, hides content  |
 | DELETE | /api/blocks/{userId}        | A    | —    | 200 OK      | Unblocks user                                   |
 | GET    | /api/blocks                 | A    | —    | `BlockDto[]`| List of users blocked by current user           |
+
+### BusinessController (`/api/business`)
+| Method | Route                       | Auth | Body | Returns     | Notes                        |
+| ------ | --------------------------- | ---- | ---- | ----------- | ---------------------------- |
+| POST   | /api/business/claim         | A    | `CreateClaimDto` | `PlaceClaim` | Submit claim |
+| GET    | /api/business/claims        | Adm  | —    | `ClaimDto[]`| List pending claims |
+| POST   | /api/business/claims/{id}/approve | Adm | — | 200 | Transfers ownership, adds Business role |
+| POST   | /api/business/claims/{id}/reject  | Adm | — | 200 | Rejects claim |
+| GET    | /api/business/analytics/{id}| Bus  | —    | AnalyticsObj| Place Owner/Admin only |
 
 ### EventsController (`/api/Events`)
 | Method | Route                                            | Auth | Body             | Returns      | Notes                                     |
@@ -459,6 +477,7 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
   - Address is required
   - Name auto-fetched from Google Places API
   - Duplicates checked by exact address match only
+  - **Ownership Transfer**: Can be claimed via Business workflows; `PlaceDetailsDto.ClaimStatus` will reflect pending/approved claims for the viewer.
   
 - **Custom Places**:
   - Can be any visibility (Public/Friends/Private)

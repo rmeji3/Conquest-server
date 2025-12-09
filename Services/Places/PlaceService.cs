@@ -3,6 +3,7 @@ using Conquest.Dtos.Activities;
 using Conquest.Dtos.Common;
 using Conquest.Dtos.Places;
 using Conquest.Models.Places;
+using Conquest.Models.Business;
 using Conquest.Utils;
 using Conquest.Models.Reviews;
 using Conquest.Services.Friends;
@@ -472,6 +473,10 @@ public class PlaceService(
         var isFavorited = userId != null && await db.Favorited
             .AnyAsync(f => f.UserId == userId && f.PlaceId == p.Id);
 
+        var claim = userId != null 
+            ? await db.PlaceClaims.FirstOrDefaultAsync(c => c.PlaceId == p.Id && c.UserId == userId) 
+            : null;
+
 
 
         var activities = p.PlaceActivities
@@ -501,7 +506,9 @@ public class PlaceService(
             isFavorited,
             p.Favorites,
             activities,
-            activityKindNames
+            activityKindNames,
+            (ClaimStatus?)claim?.Status,
+            p.IsClaimed
         );
     }
 }

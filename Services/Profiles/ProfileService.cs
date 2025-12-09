@@ -67,15 +67,18 @@ public class ProfileService(
             }
         }
 
-        return new PersonalProfileDto(
-            user.Id,
-            user.UserName!,
-            user.FirstName,
-            user.LastName,
-            user.ProfileImageUrl,
-            user.Email!,
-            events
-        );
+            var roles = await userManager.GetRolesAsync(user);
+
+            return new PersonalProfileDto(
+                user.Id,
+                user.UserName!,
+                user.FirstName,
+                user.LastName,
+                user.ProfileImageUrl,
+                user.Email!,
+                events,
+                roles.ToArray()
+            );
     }
 
     public async Task<List<ProfileDto>> SearchProfilesAsync(string query, string currentUsername)

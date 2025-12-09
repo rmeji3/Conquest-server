@@ -1,5 +1,6 @@
 ﻿using Conquest.Dtos.Activities;
 using Conquest.Models.Places;
+using Conquest.Models.Business;
 
 namespace Conquest.Dtos.Places
 {
@@ -16,7 +17,9 @@ namespace Conquest.Dtos.Places
         bool IsFavorited,
         int Favorites,
         ActivitySummaryDto[] Activities,
-        string[] ActivityKinds
+        string[] ActivityKinds,
+        ClaimStatus? ClaimStatus = null,
+        bool IsClaimed = false
         );
 
 }

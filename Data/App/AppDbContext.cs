@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Conquest.Models.Reviews;
 using Conquest.Models.Reports;
 using Conquest.Models.Users;
+using Conquest.Models.Business;
 
 namespace Conquest.Data.App
 {
@@ -21,6 +22,7 @@ namespace Conquest.Data.App
         public DbSet<Favorited> Favorited => Set<Favorited>();
         public DbSet<ReviewLike> ReviewLikes => Set<ReviewLike>();
         public DbSet<Report> Reports => Set<Report>();
+        public DbSet<PlaceClaim> PlaceClaims => Set<PlaceClaim>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
