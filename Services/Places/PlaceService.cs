@@ -406,6 +406,16 @@ public class PlaceService(
        place.IsDeleted = true;
        await db.SaveChangesAsync();
     }
+
+    public async Task DeletePlaceAsAdminAsync(int id)
+    {
+        var place = await db.Places.FindAsync(id);
+        if (place == null) throw new KeyNotFoundException("Place not found");
+        
+        place.IsDeleted = true;
+        await db.SaveChangesAsync();
+        logger.LogInformation("Place soft-deleted by admin: {PlaceId}", id);
+    }
     
     public async Task AddFavoriteAsync(int id, string userId)
     {

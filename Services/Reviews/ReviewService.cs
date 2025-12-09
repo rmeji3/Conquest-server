@@ -606,7 +606,7 @@ public class ReviewService(
         logger.LogInformation("User reviews fetched for {UserId}: {Count} reviews", targetUserId, result.Count);
 
         return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
-        return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
+
     }
 
     public async Task<PaginatedResult<ExploreReviewDto>> GetFriendsFeedAsync(string userId, PaginationParams pagination)
@@ -690,5 +690,16 @@ public class ReviewService(
         logger.LogInformation("Friends feed fetched for {UserId}: {Count} reviews", userId, result.Count);
 
         return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
+    }
+
+    public async Task DeleteReviewAsAdminAsync(int id)
+    {
+        var review = await appDb.Reviews.FindAsync(id);
+        if (review != null)
+        {
+             appDb.Reviews.Remove(review);
+             await appDb.SaveChangesAsync();
+             logger.LogInformation("Review deleted by Admin: {ReviewId}", id);
+        }
     }
 }

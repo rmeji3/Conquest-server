@@ -138,4 +138,15 @@ public class TagService(AppDbContext db, ILogger<TagService> logger) : ITagServi
         await db.SaveChangesAsync();
         logger.LogInformation("Merged tag {SourceId} into {TargetId}", sourceId, targetId);
     }
+
+    public async Task DeleteTagAsAdminAsync(int id)
+    {
+        var tag = await db.Tags.FindAsync(id);
+        if (tag != null)
+        {
+            db.Tags.Remove(tag);
+            await db.SaveChangesAsync();
+            logger.LogInformation("Tag deleted by Admin: {TagId}", id);
+        }
+    }
 }

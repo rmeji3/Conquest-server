@@ -9,4 +9,5 @@ public interface ITagService
     Task ApproveTagAsync(int id);
     Task BanTagAsync(int id);
     Task MergeTagAsync(int sourceId, int targetId);
+    Task DeleteTagAsAdminAsync(int id);
 }

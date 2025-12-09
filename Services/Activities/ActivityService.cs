@@ -109,4 +109,15 @@ public class ActivityService(
 
         return result;
     }
+
+    public async Task DeleteActivityAsAdminAsync(int id)
+    {
+        var pa = await db.PlaceActivities.FindAsync(id);
+        if (pa != null)
+        {
+            db.PlaceActivities.Remove(pa);
+            await db.SaveChangesAsync();
+            logger.LogInformation("Activity deleted by Admin: {ActivityId}", id);
+        }
+    }
 }

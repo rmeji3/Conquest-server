@@ -362,6 +362,29 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | POST   | /api/activity-kinds      | A    | `CreateActivityKindDto` | `ActivityKindDto`   | Enforces unique name (case-insensitive)               |
 | DELETE | /api/activity-kinds/{id} | A    | —                       | 204 NoContent       | Remove kind (restrict prevents cascade on activities) |
 
+### AdminController (`/api/admin`)
+**Requires `Admin` Role**
+
+| Method | Route                       | Query/Body                      | Returns     | Notes                                   |
+|:-------|:----------------------------|:--------------------------------|:------------|:----------------------------------------|
+| DELETE | /places/{id}               | -                               | Msg         | Soft delete (sets IsDeleted=true)       |
+| DELETE | /reviews/{id}              | -                               | Msg         | Hard delete                             |
+| DELETE | /events/{id}               | -                               | Msg         | Hard delete                             |
+| DELETE | /activities/{id}           | -                               | Msg         | Hard delete                             |
+| DELETE | /tags/{id}                 | -                               | Msg         | Hard delete                             |
+| POST   | /users/{id}/ban            | `?reason=...`                   | Msg         | Ban user by ID                          |
+| POST   | /users/ban                 | `?username=...&reason=...`      | Msg         | Ban user by Username                    |
+| POST   | /users/{id}/unban          | -                               | Msg         | Unban user                              |
+| POST   | /users/make-admin          | `?email=...`                    | Msg         | Grant Admin role                        |
+| POST   | /moderation/ip/ban         | `IpBanRequest`                  | Msg         | Ban IP address                          |
+| POST   | /moderation/ip/unban       | `IpUnbanRequest`                | Msg         | Unban IP address                        |
+| GET    | /business/claims           | -                               | List<Claim> | Get pending business claims             |
+| POST   | /business/claims/{id}/approve | -                            | Msg         | Approve claim & transfer ownership      |
+| POST   | /business/claims/{id}/reject  | -                            | Msg         | Reject claim                            |
+| POST   | /tags/{id}/approve         | -                               | 200 OK      | Approve tag                             |
+| POST   | /tags/{id}/ban             | -                               | 200 OK      | Ban tag                                 |
+| POST   | /tags/{id}/merge/{targetId}| -                               | 200 OK      | Merge tag into target                   |
+
 ### AuthController (`/api/auth`)
 | Method | Route                     | Auth | Body                | Returns           | Notes                                     |
 | ------ | ------------------------- | ---- | ------------------- | ----------------- | ----------------------------------------- |

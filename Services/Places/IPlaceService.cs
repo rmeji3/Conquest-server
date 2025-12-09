@@ -12,6 +12,7 @@ public interface IPlaceService
     Task<PaginatedResult<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId, PaginationParams pagination);
     Task<PlaceDetailsDto> UpdatePlaceAsync(int id, UpsertPlaceDto dto, string userId);
     Task DeletePlaceAsync(int id, string userId);
+    Task DeletePlaceAsAdminAsync(int id);
     Task AddFavoriteAsync(int id, string userId);
     Task UnfavoriteAsync(int id, string userId);
 }

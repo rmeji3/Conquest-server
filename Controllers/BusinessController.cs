@@ -28,7 +28,7 @@ namespace Conquest.Controllers
             try
             {
                 var claim = await _businessService.SubmitClaimAsync(userId, dto);
-                return CreatedAtAction(nameof(GetPendingClaims), new { id = claim.Id }, claim);
+                return Ok(claim);
             }
             catch (ArgumentException ex)
             {
@@ -40,57 +40,7 @@ namespace Conquest.Controllers
             }
         }
 
-        [HttpGet("claims")]
-        [Authorize(Roles = "Admin")]
-        public async Task<ActionResult<List<ClaimDto>>> GetPendingClaims()
-        {
-            var claims = await _businessService.GetPendingClaimsAsync();
-            return Ok(claims);
-        }
 
-        [HttpPost("claims/{id}/approve")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> ApproveClaim(int id)
-        {
-            var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (reviewerId == null) return Unauthorized();
-
-            try
-            {
-                await _businessService.ApproveClaimAsync(id, reviewerId);
-                return Ok(new { message = "Claim approved and ownership transferred." });
-            }
-            catch (ArgumentException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        [HttpPost("claims/{id}/reject")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> RejectClaim(int id)
-        {
-            var reviewerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (reviewerId == null) return Unauthorized();
-
-            try
-            {
-                await _businessService.RejectClaimAsync(id, reviewerId);
-                return Ok(new { message = "Claim rejected." });
-            }
-            catch (ArgumentException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
 
         [HttpGet("analytics/{placeId}")]
         [Authorize(Roles = "Business,Admin")]

@@ -385,6 +385,17 @@ public class EventService(
         return true;
     }
 
+    public async Task DeleteEventAsAdminAsync(int id)
+    {
+        var ev = await appDb.Events.FindAsync(id);
+        if (ev != null)
+        {
+            appDb.Events.Remove(ev);
+            await appDb.SaveChangesAsync();
+            logger.LogInformation("Event deleted by Admin: {EventId}", id);
+        }
+    }
+
     public async Task<bool> JoinEventAsync(int id, string userId)
     {
         var ev = await appDb.Events.FindAsync(id);

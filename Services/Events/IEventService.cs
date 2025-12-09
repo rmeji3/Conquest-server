@@ -15,6 +15,7 @@ public interface IEventService
     Task<PaginatedResult<EventDto>> GetPublicEventsAsync(double minLat, double maxLat, double minLng, double maxLng, PaginationParams pagination, string? userId = null);
     Task<PaginatedResult<EventDto>> GetEventsByPlaceAsync(int placeId, string? userId, PaginationParams pagination);
     Task<bool> DeleteEventAsync(int id, string userId);
+    Task DeleteEventAsAdminAsync(int id);
     Task<bool> JoinEventAsync(int id, string userId);
     Task<bool> InviteUserAsync(int eventId, string inviterId, string targetUserId);
     Task<bool> UninviteUserAsync(int eventId, string requesterId, string targetUserId);
