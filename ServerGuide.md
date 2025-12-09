@@ -154,6 +154,9 @@ Relationships:
 - `UserBlock.Blocker` and `UserBlock.Blocked` each `Cascade` delete.
 Indexes:
 - Unique index on `AppUser.UserName`.
+- `UserActivityLogs` (Id, UserId, Date, LoginCount, LastActivityUtc).
+- `DailySystemMetrics` (Id, Date, MetricType, Value, Dimensions).
+
 
 ### AppDbContext
 DbSets:
@@ -189,7 +192,7 @@ Property Configuration:
 ## 6. Domain Models (Summaries)
 | Entity        | Key                | Core Fields                                                                                                              | Navigation                             | Notes                                                                                                                 |
 | ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason                       |(Friends)                              | Stored in Auth DB                                                                                                     |
+| AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason, LastLoginUtc         |(Friends)                              | Stored in Auth DB                                                                                                     |
 | IpBan         | IpAddress          | Reason, CreatedAt, ExpiresAt                                                                                             | (None)                                 | Stores banned IPs                                                                                                     |
 | Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
 | Place         | Id                 | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
@@ -203,6 +206,8 @@ Property Configuration:
 | UserBlock     | (BlockerId, BlockedId) | CreatedAt                                                                                                                | Blocker, Blocked                       | Separation of concern for blocking users; masks content bidirectionally                                               |
 | Report        | Id                 | ReporterId, TargetId, TargetType, Reason, Description, Status, CreatedAt                                                 | (None - Polymorphic)                    | TargetId is string; TargetType enum (Place/Activity/Review/Profile/Bug); Status enum (Pending/Reviewed/Dismissed)         |
 | PlaceClaim    | Id                 | UserId, PlaceId, Proof, Status, CreatedUtc, ReviewedUtc, ReviewerId                                                      | Place                                  | Tracks ownership claim requests; Logic FK to User                                                                     |
+| UserActivityLog | Id               | UserId, Date, LoginCount, LastActivityUtc                                                                                | User                                   | Tracks daily unique logins per user for analytics                                                                     |
+| DailySystemMetric | Id             | Date, MetricType, Value, Dimensions                                                                                      | (None)                                 | Stores historical aggregated stats (DAU, WAU, MAU, etc.)                                                              |
 
 ---
 ## 7. DTO Contracts
@@ -267,6 +272,12 @@ Property Configuration:
 ### Business & Claims
 - `CreateClaimDto(PlaceId, Proof)`
 - `ClaimDto(Id, PlaceId, PlaceName, UserId, UserName, Proof, Status, CreatedUtc, ReviewedUtc)`
+
+### Analytics
+- `DashboardStatsDto(Dau, Wau, Mau, TotalUsers, NewUsersToday)`
+- `TrendingPlaceDto(PlaceId, Name, ReviewCount, CheckInCount, TotalInteractions)`
+- `ModerationStatsDto(PendingReports, BannedUsers, BannedIps, RejectedReviews)`
+
 
 ---
 ## 8. Services (Service Layer Architecture)
@@ -374,7 +385,8 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | DELETE | /tags/{id}                 | -                               | Msg         | Hard delete                             |
 | POST   | /users/{id}/ban            | `?reason=...`                   | Msg         | Ban user by ID                          |
 | POST   | /users/ban                 | `?username=...&reason=...`      | Msg         | Ban user by Username                    |
-| POST   | /users/{id}/unban          | -                               | Msg         | Unban user                              |
+| POST   | /users/{id}/unban          | -                               | Msg         | Unban user by ID                        |
+| POST   | /users/unban               | `?username=...`                 | Msg         | Unban user by Username                  |
 | POST   | /users/make-admin          | `?email=...`                    | Msg         | Grant Admin role                        |
 | POST   | /moderation/ip/ban         | `IpBanRequest`                  | Msg         | Ban IP address                          |
 | POST   | /moderation/ip/unban       | `IpUnbanRequest`                | Msg         | Unban IP address                        |
@@ -488,6 +500,16 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | POST   | /api/moderation/unban/user/{id} | Adm | — | 200 | Unbans user |
 | POST   | /api/moderation/ban/ip      | Adm | `IpBanRequest` | 200 | Bans IP (Redis + DB) |
 | POST   | /api/moderation/unban/ip    | Adm | `IpUnbanRequest` | 200 | Unbans IP |
+
+### Admin AnalyticsController (`/api/admin/analytics`)
+**Requires `Admin` Role**
+| Method | Route                       | Auth | Returns                   | Notes                                                |
+| ------ | --------------------------- | ---- | ------------------------- | ---------------------------------------------------- |
+| GET    | /dashboard                  | Adm  | `DashboardStatsDto`       | Real-time stats: DAU, WAU, MAU, Total Users          |
+| GET    | /trending                   | Adm  | `TrendingPlaceDto[]`      | Top 10 places by interactions (Reviews + CheckIns) in last 7 days |
+| GET    | /moderation                 | Adm  | `ModerationStatsDto`      | Pending reports, banned user count, banned IP count  |
+| GET    | /growth (Q: type, days)     | Adm  | `DailySystemMetric[]`     | Historical growth data (e.g., DAU over 30 days)      |
+| POST   | /compute-now                | Adm  | String (Msg)              | Manually trigger daily metrics computation           |
 
 ---
 ## 10. Validation & Business Rules

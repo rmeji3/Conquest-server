@@ -106,6 +106,21 @@ namespace Conquest.Controllers
             await banningService.UnbanUserAsync(id, adminId);
             return Ok(new { message = $"User {id} unbanned." });
         }
+
+        [HttpPost("users/unban")]
+        public async Task<IActionResult> UnbanUserByUsername([FromQuery] string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                return BadRequest("Username is required.");
+
+            var user = await userManager.FindByNameAsync(username);
+            if (user == null)
+                return NotFound($"User with username '{username}' not found.");
+
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            await banningService.UnbanUserAsync(user.Id, adminId);
+            return Ok(new { message = $"User {username} unbanned." });
+        }
         
         [HttpPost("users/make-admin")]
         public async Task<IActionResult> MakeAdmin([FromQuery] string email)

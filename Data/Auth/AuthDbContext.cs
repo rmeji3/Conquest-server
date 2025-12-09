@@ -11,6 +11,8 @@ namespace Conquest.Data.Auth
         public DbSet<Friendship> Friendships => Set<Friendship>();
         public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
         public DbSet<IpBan> IpBans => Set<IpBan>();
+        public DbSet<Conquest.Models.Analytics.UserActivityLog> UserActivityLogs => Set<Conquest.Models.Analytics.UserActivityLog>();
+        public DbSet<Conquest.Models.Analytics.DailySystemMetric> DailySystemMetrics => Set<Conquest.Models.Analytics.DailySystemMetric>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -52,6 +54,17 @@ namespace Conquest.Data.Auth
                 .WithMany()
                 .HasForeignKey(ub => ub.BlockedId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Analytics
+            builder.Entity<Conquest.Models.Analytics.UserActivityLog>()
+                .HasIndex(l => new { l.UserId, l.Date })
+                .IsUnique(); // One log per user per day
+
+             builder.Entity<Conquest.Models.Analytics.UserActivityLog>()
+                .HasIndex(l => l.Date); // Optimize aggregation by date
+
+            builder.Entity<Conquest.Models.Analytics.DailySystemMetric>()
+                .HasIndex(m => m.Date);
         }
     }
 }

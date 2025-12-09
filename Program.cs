@@ -21,6 +21,7 @@ using Conquest.Services.Google;
 using Conquest.Services.Recommendations;
 using Conquest.Services.Storage;
 using Conquest.Services;
+using Conquest.Services.Analytics;
 using Microsoft.SemanticKernel;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -156,6 +157,8 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IBlockService, BlockService>();
 builder.Services.AddScoped<IBusinessService, BusinessService>();
 builder.Services.AddScoped<IBanningService, BanningService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+builder.Services.AddHostedService<AnalyticsBackgroundJob>();
 
 // --- AWS S3 & Storage ---
 var awsOptions = builder.Configuration.GetAWSOptions();

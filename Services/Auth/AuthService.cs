@@ -1,5 +1,6 @@
 using Conquest.Dtos.Auth;
 using Conquest.Models.AppUsers;
+using Conquest.Models.Analytics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ public class AuthService(
     UserManager<AppUser> users,
     SignInManager<AppUser> signIn,
     ITokenService tokens,
+    Conquest.Data.Auth.AuthDbContext db,
     IHostEnvironment env,
     ILogger<AuthService> logger) : IAuthService
 {
@@ -70,6 +72,41 @@ public class AuthService(
             logger.LogWarning("Login failed: Invalid password for '{Email}'.", dto.Email);
             throw new UnauthorizedAccessException("Invalid credentials.");
         }
+
+        // Analytics Tracking
+        var now = DateTimeOffset.UtcNow;
+        var today = DateOnly.FromDateTime(now.DateTime);
+
+        user.LastLoginUtc = now;
+        // Identity tracks changes to user via UserManager or we can attach to context,
+        // but since we have DB context, let's use it for the activity log.
+        // Note: UserManager "Find" methods attach the user to the context it uses.
+        // Assuming AuthDbContext is the backing store for UserManager.
+        
+        await users.UpdateAsync(user); // Persist LastLoginUtc
+
+        // Update/Create Daily Log
+        var log = await db.UserActivityLogs
+            .FirstOrDefaultAsync(l => l.UserId == user.Id && l.Date == today);
+
+        if (log == null)
+        {
+            log = new UserActivityLog
+            {
+                UserId = user.Id,
+                Date = today,
+                LoginCount = 1,
+                LastActivityUtc = now
+            };
+            db.UserActivityLogs.Add(log);
+        }
+        else
+        {
+            log.LoginCount++;
+            log.LastActivityUtc = now;
+        }
+
+        await db.SaveChangesAsync();
 
         logger.LogInformation("User logged in: {UserId}", user.Id);
         return await tokens.CreateAuthResponseAsync(user);

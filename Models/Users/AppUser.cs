@@ -21,6 +21,8 @@ namespace Conquest.Models.AppUsers
         [MaxLength(45)] // IPv6 max length
         public string? LastIpAddress { get; set; }
         public string? BanReason { get; set; }
+
+        public DateTimeOffset? LastLoginUtc { get; set; }
     }
 
     public enum PrivacyConstraint
