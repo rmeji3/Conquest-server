@@ -4,6 +4,8 @@ using Conquest.Services.Profiles;
 using Conquest.Services.Reviews;
 using Conquest.Dtos.Common;
 using Conquest.Dtos.Reviews;
+using Conquest.Dtos.Places;
+using Conquest.Dtos.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -122,6 +124,46 @@ public class ProfilesController(IProfileService profileService, IReviewService r
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
             var reviews = await reviewService.GetUserReviewsAsync(id, currentUserId, pagination);
             return Ok(reviews);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound("User not found.");
+        }
+    }
+
+    // GET /api/profiles/{id}/places?pageNumber=1&pageSize=10
+    [HttpGet("{id}/places")]
+    public async Task<ActionResult<PaginatedResult<PlaceDetailsDto>>> GetUserPlaces(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (currentUserId is null) return Unauthorized();
+
+        try
+        {
+            // Privacy check is inside the service method
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var places = await profileService.GetUserPlacesAsync(id, currentUserId, pagination);
+            return Ok(places);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound("User not found.");
+        }
+    }
+
+    // GET /api/profiles/{id}/events?pageNumber=1&pageSize=10
+    [HttpGet("{id}/events")]
+    public async Task<ActionResult<PaginatedResult<EventDto>>> GetUserEvents(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (currentUserId is null) return Unauthorized();
+
+        try
+        {
+            // Privacy check is inside the service method
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var events = await profileService.GetUserEventsAsync(id, currentUserId, pagination);
+            return Ok(events);
         }
         catch (KeyNotFoundException)
         {

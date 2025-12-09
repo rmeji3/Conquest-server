@@ -153,6 +153,59 @@ public class PlaceService(
         return await ToPlaceDetailsDto(place, userId);
     }
 
+    public async Task<PlaceDetailsDto> UpdatePlaceAsync(int id, UpsertPlaceDto dto, string userId)
+    {
+        var place = await db.Places.FindAsync(id);
+        if (place == null)
+            throw new InvalidOperationException("Place not found.");
+
+        if (place.OwnerUserId != userId)
+            throw new InvalidOperationException("You do not have permission to update this place.");
+
+        // RULE: Private/Friends places can only be Custom (not Verified)
+        if (dto.Visibility != PlaceVisibility.Public && dto.Type == PlaceType.Verified)
+        {
+             logger.LogWarning("Verified type is only allowed for Public places. Auto-correcting to Custom for {Visibility} place update.", dto.Visibility);
+             dto = dto with { Type = PlaceType.Custom };
+        }
+
+        var finalName = dto.Name.Trim();
+
+        // Moderate Place Name only if it's changing and user-provided (Custom)
+        // Or if it's changing at all for safety? 
+        // If the name is DIFFERENT from current name, run moderation.
+        if (place.Name != finalName)
+        {
+            if (dto.Type == PlaceType.Custom)
+            {
+                 var mod = await moderationService.CheckContentAsync(finalName);
+                 if (mod.IsFlagged)
+                 {
+                     logger.LogWarning("Place name flagged on update: {Name} - {Reason}", finalName, mod.Reason);
+                     throw new ArgumentException($"Place name rejected: {mod.Reason}");
+                 }
+            }
+        }
+
+        place.Name = finalName;
+        place.Address = dto.Address?.Trim() ?? string.Empty;
+        place.Latitude = dto.Latitude;
+        place.Longitude = dto.Longitude;
+        place.Visibility = dto.Visibility;
+        place.Type = dto.Type;
+
+        // Note: Creation Date stays same. 
+        // We do typically update Modified date if we had one, but Place model might not have it.
+        // Assuming Place model doesn't track ModifiedUtc based on previous file view (viewed CreatePlaceAsync, didn't see model). 
+        // I'll stick to updating fields.
+
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Place {PlaceId} updated by {UserId}.", place.Id, userId);
+
+        return await ToPlaceDetailsDto(place, userId);
+    }
+
     public async Task<PlaceDetailsDto?> GetPlaceByIdAsync(int id, string? userId)
     {
         var p = await db.Places

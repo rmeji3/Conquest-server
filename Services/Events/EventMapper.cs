@@ -37,7 +37,7 @@ public static class EventMapper
         {
             status = "mine";
         }
-        else if (ev.Attendees.Any(a => a.UserId == currentUserId))
+        else if (ev.Attendees != null && ev.Attendees.Any(a => a.UserId == currentUserId))
         {
             status = "attending";
         }

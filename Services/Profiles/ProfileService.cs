@@ -14,6 +14,8 @@ using Conquest.Dtos.Reviews; // Fix ReviewDto
 using Conquest.Dtos.Places;  // Fix PlaceDetailsDto
 using Conquest.Dtos.Events; // Logic for events
 using Conquest.Services.Events; // For EventMapper
+using Conquest.Dtos.Common; // For PaginationParams, PaginatedResult
+using Conquest.Services.Profiles;
 using DtoPrivacy = Conquest.Dtos.Profiles.PrivacyConstraint; // Alias for DTO enum
 using AppUserPrivacy = Conquest.Models.AppUsers.PrivacyConstraint; // Alias for Model enum
 
@@ -427,5 +429,179 @@ public class ProfileService(
             (DtoPrivacy)user.PlacesPrivacy,
             (DtoPrivacy)user.LikesPrivacy
         );
+    }
+    public async Task<PaginatedResult<PlaceDetailsDto>> GetUserPlacesAsync(string targetUserId, string currentUserId, PaginationParams pagination)
+    {
+        var user = await userManager.FindByIdAsync(targetUserId);
+        if (user is null) throw new KeyNotFoundException("User not found.");
+
+        // Check Privacy
+        var fsStatus = await friendService.GetFriendshipStatusAsync(currentUserId, targetUserId);
+        var isFriend = fsStatus == Friendship.FriendshipStatus.Accepted;
+        var isSelf = targetUserId == currentUserId;
+
+        // If not self, check privacy settings
+        if (!isSelf)
+        {
+            bool canViewPlaces = user.PlacesPrivacy == AppUserPrivacy.Public ||
+                                 (user.PlacesPrivacy == AppUserPrivacy.FriendsOnly && isFriend);
+            if (!canViewPlaces)
+            {
+                // Return empty if privacy restricts access
+                return new PaginatedResult<PlaceDetailsDto>(new List<PlaceDetailsDto>(), 0, pagination.PageNumber, pagination.PageSize);
+            }
+        }
+
+        // Logic: Return {Place, Date} to allow sorting by recency
+        // Created Places
+        var createdQuery = appDb.Places.AsNoTracking()
+            .Where(p => p.OwnerUserId == targetUserId && !p.IsDeleted)
+            .Select(p => new { Place = p, Date = p.CreatedUtc });
+
+        // Visited Places (from Reviews)
+        var visitedQuery = appDb.Reviews.AsNoTracking()
+            .Where(r => r.UserId == targetUserId)
+            .Select(r => new { Place = r.PlaceActivity.Place, Date = r.CreatedAt })
+            .Where(x => !x.Place.IsDeleted);
+
+        var combinedQuery = createdQuery.Union(visitedQuery);
+
+        // Apply Visibility Filters to the combined list (to hide private/friends-only places user shouldn't see)
+        // Public: Everyone sees
+        // Owner is Me (Viewer): I see
+        // Owner is Target (Profile Owner) AND IsFriend: I see (because of 'friends only' visibility logic on the place + we are friends)
+        // Note: Logic copied from GetProfileByIdAsync but adapted for LINQ
+        combinedQuery = combinedQuery.Where(x => 
+            x.Place.Visibility == Models.Places.PlaceVisibility.Public ||
+            x.Place.OwnerUserId == currentUserId ||
+            (x.Place.Visibility == Models.Places.PlaceVisibility.Friends && x.Place.OwnerUserId == targetUserId && isFriend)
+            // Note: We exclude third-party friends-only places if we aren't the owner, as consistent with GetProfile logic
+        );
+
+        var totalCount = await combinedQuery.Select(x => x.Place.Id).Distinct().CountAsync();
+        
+        // Paginate - distinct by Place ID to avoid duplicates if visited + created same place? 
+        // Union handles distinct on the anonymous object {Place, Date}. 
+        // If created and visited at different times, they appear twice? Yes.
+        // We probably want unique Places.
+        // GroupBy ID and take latest date.
+        
+        var pagedItems = await combinedQuery
+            .GroupBy(x => x.Place.Id)
+            .Select(g => g.OrderByDescending(x => x.Date).First()) // Take most recent interaction
+            .OrderByDescending(x => x.Date)
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
+            .Select(x => x.Place)
+            .ToListAsync();
+
+        var placeDtos = new List<PlaceDetailsDto>();
+        foreach (var p in pagedItems)
+        {
+            bool isPlaceOwner = p.OwnerUserId == currentUserId;
+            // Map
+            placeDtos.Add(new PlaceDetailsDto(
+                p.Id,
+                p.Name,
+                p.Address ?? string.Empty,
+                p.Latitude,
+                p.Longitude,
+                p.Visibility,
+                p.Type,
+                isPlaceOwner,
+                false, // IsFavorited - fetching this requires extra query, skipping for list view or need batch check
+                0, // Favorites count
+                Array.Empty<ActivitySummaryDto>(),
+                Array.Empty<string>()
+            ));
+        }
+
+        return new PaginatedResult<PlaceDetailsDto>(placeDtos, totalCount, pagination.PageNumber, pagination.PageSize);
+    }
+
+    public async Task<PaginatedResult<EventDto>> GetUserEventsAsync(string targetUserId, string currentUserId, PaginationParams pagination)
+    {
+        var user = await userManager.FindByIdAsync(targetUserId);
+        if (user is null) throw new KeyNotFoundException("User not found.");
+
+        var isSelf = targetUserId == currentUserId;
+        
+        // No specific "EventsPrivacy" setting on User model yet (only Reviews, Places, Likes).
+        // Assuming Events are public if the Event itself is Public, or if we share commonality?
+        // Usually Profiles imply "Things I'm doing". 
+        // If I am not friend, should I see their events? 
+        // Let's assume yes, filtered by Event Visibility (Public events are visible).
+
+        // Created Events
+        var createdQuery = appDb.Events.AsNoTracking()
+            .Where(e => e.CreatedById == targetUserId);
+
+        // Attending Events
+        var attendingQuery = appDb.EventAttendees.AsNoTracking()
+            .Where(ea => ea.UserId == targetUserId)
+            .Select(ea => ea.Event);
+
+        var combinedQuery = createdQuery.Union(attendingQuery);
+
+        // Visibility Filter
+        // 1. Public events -> Visible
+        // 2. I created the event -> Visible
+        // 3. I am attending the event -> Visible
+        // 4. (Optional) Friend of creator? 
+        // For now: Only Public or Involved.
+        combinedQuery = combinedQuery.Where(e => 
+            e.IsPublic || 
+            e.CreatedById == currentUserId || 
+            e.Attendees.Any(a => a.UserId == currentUserId)
+        );
+
+        // Only Upcoming? Or Past too?
+        // "Events" tab usually shows upcoming first. user might want history.
+        // Let's default to All, Ordered by StartTime. 
+        // Or if the user explicit asked for "Profile with... load as I scroll", probably wants future then past?
+        // Standard: Descending StartTime (Newest/Future first) or Ascending from Now?
+        // Let's sort by StartTime Descending (Show latest/future first).
+        
+        var totalCount = await combinedQuery.CountAsync();
+
+        var pagedEvents = await combinedQuery
+            .OrderByDescending(e => e.StartTime)
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
+            .Include(e => e.Attendees) // Need attendees for mapping
+            .ToListAsync();
+
+        var eventDtos = new List<EventDto>();
+        if (pagedEvents.Any())
+        {
+            // Batch fetch creators
+            var creatorIds = pagedEvents.Select(e => e.CreatedById).Distinct().ToList();
+            var creators = await userManager.Users
+                .AsNoTracking()
+                .Where(u => creatorIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id);
+
+            // Batch fetch attendees for mapping (only those in the event attendees list)
+            // EventMapper needs `attendeeUsers` dictionary to map `Attendees` list.
+            var allAttendeeIds = pagedEvents.SelectMany(e => e.Attendees.Select(a => a.UserId)).Distinct().ToList();
+            // This could be large. Limit?
+            // For card view, we usually need top X attendees or just count. 
+            // EventMapper maps ALL attendees.
+            var attendeesMap = await userManager.Users
+                .AsNoTracking()
+                .Where(u => allAttendeeIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id);
+
+            foreach (var evt in pagedEvents)
+            {
+                if (creators.TryGetValue(evt.CreatedById, out var creator))
+                {
+                    var creatorSummary = new UserSummaryDto(creator.Id, creator.UserName!, creator.FirstName, creator.LastName, creator.ProfileImageUrl);
+                    eventDtos.Add(EventMapper.MapToDto(evt, creatorSummary, attendeesMap, currentUserId));
+                }
+            }
+        }
+
+        return new PaginatedResult<EventDto>(eventDtos, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 }

@@ -10,9 +10,9 @@ namespace Conquest.Models.Places
         [MaxLength(200)]
         public required string Name { get; set; } = null!;
         [MaxLength(300)]
-        public string? Address { get; init; }
-        public double Latitude { get; init; }
-        public double Longitude { get; init; }
+        public string? Address { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
         [MaxLength(100)]
         public string OwnerUserId { get; set; } = null!;
         public PlaceVisibility Visibility { get; set; } = PlaceVisibility.Private;

@@ -40,6 +40,32 @@ namespace Conquest.Controllers.Places
                 return BadRequest(new { error = ex.Message });
             }
         }
+        
+        // PUT /api/places/{id}
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<PlaceDetailsDto>> Update(int id, [FromBody] UpsertPlaceDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                return BadRequest("Place name is required.");
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+                return Unauthorized("You must be logged in to update a place.");
+            
+            try
+            {
+                var result = await placeService.UpdatePlaceAsync(id, dto, userId);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
 
         // GET /api/places/{id}
         [HttpGet("{id:int}")]

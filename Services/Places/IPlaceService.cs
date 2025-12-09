@@ -10,6 +10,7 @@ public interface IPlaceService
     Task<PlaceDetailsDto?> GetPlaceByIdAsync(int id, string? userId);
     Task<PaginatedResult<PlaceDetailsDto>> SearchNearbyAsync(double lat, double lng, double radiusKm, string? activityName, string? activityKind, PlaceVisibility? visibility, PlaceType? type, string? userId, PaginationParams pagination);
     Task<PaginatedResult<PlaceDetailsDto>> GetFavoritedPlacesAsync(string userId, PaginationParams pagination);
+    Task<PlaceDetailsDto> UpdatePlaceAsync(int id, UpsertPlaceDto dto, string userId);
     Task DeletePlaceAsync(int id, string userId);
     Task AddFavoriteAsync(int id, string userId);
     Task UnfavoriteAsync(int id, string userId);
