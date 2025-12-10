@@ -245,7 +245,7 @@ Property Configuration:
 
 ### Profiles
 - `ProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?)`
-- `PersonalProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl, Email, Events[], Roles[])`
+- `PersonalProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl, Email, Events[], Places[], Reviews[], Roles[])`
 
 ### Reviews
 - `UserReviewsDto(Review, History[])` - Grouped response

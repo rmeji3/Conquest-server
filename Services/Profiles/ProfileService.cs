@@ -64,6 +64,64 @@ public class ProfileService(
             {
                 events.Add(EventMapper.MapToDto(evt, creatorSummary, attendeeUsers, userId));
             }
+
+        }
+
+        // Fetch My Reviews
+        var reviews = await appDb.Reviews.AsNoTracking()
+            .Where(r => r.UserId == userId)
+            .Include(r => r.ReviewTags).ThenInclude(rt => rt.Tag)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new ReviewDto(
+                r.Id,
+                r.Rating,
+                r.Content,
+                r.UserId,
+                user.UserName!,
+                user.ProfileImageUrl,
+                r.ImageUrl,
+                r.CreatedAt,
+                r.LikesList.Count,
+                r.LikesList.Any(l => l.UserId == userId),
+                r.ReviewTags.Select(rt => rt.Tag.Name).ToList()
+            ))
+            .ToListAsync();
+
+        // Fetch My Places (Created + Visited)
+        // Created Places
+        var createdPlacesQuery = appDb.Places.AsNoTracking()
+            .Where(p => p.OwnerUserId == userId && !p.IsDeleted)
+            .Select(p => new { Place = p, Date = p.CreatedUtc });
+
+        // Visited Places (from Reviews)
+        var visitedPlacesQuery = appDb.Reviews.AsNoTracking()
+            .Where(r => r.UserId == userId)
+            .Select(r => new { Place = r.PlaceActivity.Place, Date = r.CreatedAt })
+            .Where(x => !x.Place.IsDeleted);
+
+        var combinedPlaces = await createdPlacesQuery
+            .Union(visitedPlacesQuery)
+            .GroupBy(x => x.Place.Id)
+            .Select(g => g.OrderByDescending(x => x.Date).First().Place)
+            .ToListAsync();
+
+        var places = new List<PlaceDetailsDto>();
+        foreach (var p in combinedPlaces)
+        {
+            places.Add(new PlaceDetailsDto(
+                p.Id,
+                p.Name,
+                p.Address ?? string.Empty,
+                p.Latitude,
+                p.Longitude,
+                p.Visibility,
+                p.Type,
+                p.OwnerUserId == userId, // IsOwner
+                false, // IsFavorited - simpler to skip for "My Profile" summary or fetch if needed. Keeping it false for now as per other endpoints to avoid N+1
+                0, // Favorites count - skipping for summary
+                Array.Empty<ActivitySummaryDto>(),
+                Array.Empty<string>()
+            ));
         }
 
             var roles = await userManager.GetRolesAsync(user);
@@ -76,6 +134,8 @@ public class ProfileService(
                 user.ProfileImageUrl,
                 user.Email!,
                 events,
+                places,
+                reviews,
                 roles.ToArray()
             );
     }

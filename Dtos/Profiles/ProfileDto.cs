@@ -57,5 +57,7 @@ public record PersonalProfileDto(
     string? ProfilePictureUrl,
     [Required] string Email,
     List<EventDto> Events,
+    List<PlaceDetailsDto> Places,
+    List<ReviewDto> Reviews,
     string[] Roles
 );
