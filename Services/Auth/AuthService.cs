@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text;
+using Conquest.Services.Moderation;
 
 namespace Conquest.Services.Auth;
 
@@ -16,7 +17,8 @@ public class AuthService(
     ITokenService tokens,
     Conquest.Data.Auth.AuthDbContext db,
     IHostEnvironment env,
-    ILogger<AuthService> logger) : IAuthService
+    ILogger<AuthService> logger,
+    IModerationService moderationService) : IAuthService
 {
     public async Task<AuthResponse> RegisterAsync(RegisterDto dto)
     {
@@ -28,7 +30,14 @@ public class AuthService(
         };
         
         var normalized = dto.UserName.ToUpper();
-        
+        // moderation check for username
+        var moderationResult = await moderationService.CheckContentAsync(dto.UserName);
+        if (moderationResult.IsFlagged)
+        {
+            logger.LogWarning("Registration failed: Username '{UserName}' is flagged.", dto.UserName);
+            throw new ArgumentException($"Username is flagged: {moderationResult.Reason}");
+        }
+
         var existing = await users.Users
             .FirstOrDefaultAsync(u => u.NormalizedUserName == normalized);
 
