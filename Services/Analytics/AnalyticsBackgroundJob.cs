@@ -39,9 +39,9 @@ public class AnalyticsBackgroundJob(
             }
 
             // Wait 1 hour before next run
-            // await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+            await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
             // for testing, wait 1 minute
-            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            // await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
     }
 }
