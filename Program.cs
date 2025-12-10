@@ -50,6 +50,9 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.WithEnvironmentName()
     .WriteTo.Console(
         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}      {Message:lj}{NewLine}{Exception}")
+    // Filter out HostAbortedException (expected during EF migrations - not a real error)
+    .Filter.ByExcluding(logEvent => 
+        logEvent.Exception is Microsoft.Extensions.Hosting.HostAbortedException)
     .CreateLogger();
 
 try
