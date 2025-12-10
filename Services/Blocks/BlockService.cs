@@ -7,7 +7,7 @@ using Conquest.Data.Auth;
 
 namespace Conquest.Services.Blocks
 {
-    public class BlockService(AppDbContext context, AuthDbContext authDb) : IBlockService
+    public class BlockService(AuthDbContext authDb) : IBlockService
     {
         public async Task BlockUserAsync(string blockerId, string blockedId)
         {

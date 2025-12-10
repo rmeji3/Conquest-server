@@ -813,8 +813,37 @@ Health check status is automatically exported as a metric:
   - `0.5` = Degraded
 - **Label**: `name` (e.g., `npgsql`, `auth_db_context`, etc.)
 
+### Structured Logging (Serilog)
+The application uses **Serilog** for structured logging, which enables better log analysis and correlation.
+
+**Packages**:
+- `Serilog.AspNetCore` - Core integration
+- `Serilog.Enrichers.Environment` - Machine name and environment enrichment
+
+**Configuration** (in `Program.cs`):
+- **Minimum Level**: `Information` (default)
+- **Overrides**:
+  - `Microsoft.AspNetCore`: Warning (reduces ASP.NET noise)
+  - `Microsoft.EntityFrameworkCore`: Warning (reduces EF query noise)
+- **Enrichers**: `FromLogContext`, `WithMachineName`, `WithEnvironmentName`
+- **Sink**: Console with custom output template
+
+**HTTP Request Logging**:
+All HTTP requests are automatically logged via `UseSerilogRequestLogging()`:
+```
+HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed}ms
+```
+Enriched with: `RequestHost`, `UserAgent`.
+
+**Startup/Shutdown**:
+- Application wrapped in try-catch-finally for clean shutdown
+- Startup: `Log.Information("Starting Conquest API server")`
+- Fatal errors logged before exit
+- `Log.CloseAndFlush()` ensures all logs are written before process exits
+
 
 ---
+
 ## 18. Quick Reference Summary
 | Layer      | Items                                                           |
 | ---------- | --------------------------------------------------------------- |
@@ -911,6 +940,23 @@ When generating or modifying code:
 - Follow "Thin Controller, Fat Service" architecture pattern.
 - Use Redis for rate limiting and caching where appropriate.
 - Maintain privacy enforcement for all place-related operations.
+
+---
+## 21. Testing Strategy
+We use `xUnit` + `Microsoft.AspNetCore.Mvc.Testing` for integration testing.
+
+### Infrastructure
+- **Tests/Conquest.Tests**: Main test project.
+- **IntegrationTestFactory**: `WebApplicationFactory` customization that replaces the database with `InMemory` providers for isolation.
+- **BaseIntegrationTest**: Base class creating `HttpClient` and handling auth.
+
+### How to Run
+```bash
+dotnet test Tests/Conquest.Tests
+```
+
+### Writing Tests
+Inherit `BaseIntegrationTest`. The factory ensures a fresh server instance (logic-wise) and cleanable DBs.
 
 ---
 End of guide.

@@ -20,6 +20,8 @@ public class AnalyticsService(
 {
     public async Task<DashboardStatsDto> GetDashboardStatsAsync()
     {
+        logger.LogInformation("Fetching dashboard stats");
+        
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var sevenDaysAgo = today.AddDays(-6); 
         var thirtyDaysAgo = today.AddDays(-29);
@@ -27,6 +29,7 @@ public class AnalyticsService(
         // DAU: Users active today
         var dau = await authDb.UserActivityLogs
             .CountAsync(l => l.Date == today);
+        logger.LogDebug("DAU count: {Dau}", dau);
 
         // WAU: Distinct users active in last 7 days including today
         var wau = await authDb.UserActivityLogs
@@ -34,6 +37,7 @@ public class AnalyticsService(
             .Select(l => l.UserId)
             .Distinct()
             .CountAsync();
+        logger.LogDebug("WAU count: {Wau}", wau);
 
         // MAU: Distinct users active in last 30 days
         var mau = await authDb.UserActivityLogs
@@ -41,9 +45,11 @@ public class AnalyticsService(
             .Select(l => l.UserId)
             .Distinct()
             .CountAsync();
+        logger.LogDebug("MAU count: {Mau}", mau);
 
         // Total Users
         var totalUsers = await authDb.Users.CountAsync();
+        logger.LogDebug("Total users: {TotalUsers}", totalUsers);
 
         // New Users Today (Approximation: Users created today? We don't have CreatedAt. 
         // We'll use: Users whose FIRST activity log is today)
@@ -57,32 +63,45 @@ public class AnalyticsService(
         // Revised: Return 0 for NewUsersToday until we have CreatedAt column or better tracking.
         var newUsers = 0; 
 
+        logger.LogInformation("Dashboard stats fetched: DAU={Dau}, WAU={Wau}, MAU={Mau}, TotalUsers={TotalUsers}", dau, wau, mau, totalUsers);
         return new DashboardStatsDto(dau, wau, mau, totalUsers, newUsers);
     }
 
     public async Task<List<DailySystemMetric>> GetHistoricalGrowthAsync(string metricType, int days)
     {
+        logger.LogInformation("Fetching historical growth for metricType={MetricType}, days={Days}", metricType, days);
+        
         var cutoff = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-days));
-        return await authDb.DailySystemMetrics
+        var metrics = await authDb.DailySystemMetrics
             .Where(m => m.MetricType == metricType && m.Date >= cutoff)
             .OrderBy(m => m.Date)
             .ToListAsync();
+        
+        logger.LogDebug("Retrieved {Count} historical metrics for {MetricType}", metrics.Count, metricType);
+        return metrics;
     }
 
     public async Task<List<DailySystemMetric>> GetGrowthByRegionAsync()
     {
+        logger.LogInformation("Fetching growth by region");
+        
         // Example: Returning latest region stats
         // In reality, this depends on "Dimensions" JSON in DailySystemMetric
         // For now, return empty or implement basic logic if metrics exist
-        return await authDb.DailySystemMetrics
+        var metrics = await authDb.DailySystemMetrics
             .Where(m => m.MetricType == "RegionGrowth")
             .OrderByDescending(m => m.Date)
             .Take(7)
             .ToListAsync();
+        
+        logger.LogDebug("Retrieved {Count} region growth metrics", metrics.Count);
+        return metrics;
     }
 
     public async Task<List<TrendingPlaceDto>> GetTrendingPlacesAsync()
     {
+        logger.LogInformation("Fetching trending places");
+        
         // Trending: Places with most Reviews/CheckIns in last 7 days
         var cutoff = DateTime.UtcNow.AddDays(-7);
 
@@ -100,6 +119,8 @@ public class AnalyticsService(
             .Take(10)
             .ToListAsync();
 
+        logger.LogDebug("Found {Count} trending places", trending.Count);
+        
         return trending.Select(t => new TrendingPlaceDto(
             t.Place.Id,
             t.Place.Name,
@@ -111,6 +132,8 @@ public class AnalyticsService(
 
     public async Task<ModerationStatsDto> GetModerationStatsAsync()
     {
+        logger.LogInformation("Fetching moderation stats");
+        
         var pendingReports = await appDb.Reports
             .CountAsync(r => r.Status == ReportStatus.Pending);
 
@@ -120,26 +143,35 @@ public class AnalyticsService(
         var bannedIps = await authDb.IpBans
             .CountAsync();
 
+        logger.LogDebug("Moderation stats: PendingReports={PendingReports}, BannedUsers={BannedUsers}, BannedIPs={BannedIPs}", 
+            pendingReports, bannedUsers, bannedIps);
+        
         return new ModerationStatsDto(pendingReports, bannedUsers, bannedIps, 0);
     }
 
     public async Task ComputeDailyMetricsAsync(DateOnly date)
     {
+        logger.LogInformation("Computing daily metrics for date={Date}", date);
+        
         // Idempotency: Check if already computed?
         // We can overwrite or skip. Let's delete existing for this date/type to avoid dupes.
         
         // 1. DAU
         var dauCount = await authDb.UserActivityLogs.CountAsync(l => l.Date == date);
         await SaveMetric(date, "DAU", dauCount);
+        logger.LogDebug("Saved DAU metric: {DauCount} for {Date}", dauCount, date);
 
         // 2. Total Users (Snapshot)
         var totalUsers = await authDb.Users.CountAsync();
         await SaveMetric(date, "TotalUsers", totalUsers);
+        logger.LogDebug("Saved TotalUsers metric: {TotalUsers} for {Date}", totalUsers, date);
         
         // 3. New Users (Requires CreatedAt or diffing TotalUsers with yesterday? messy). 
         // Skip for now.
 
         // 4. Trending Region (if we had IpAddress geolocation) - Placeholder
+        
+        logger.LogInformation("Completed computing daily metrics for {Date}", date);
     }
 
     private async Task SaveMetric(DateOnly date, string type, double value, string? dimensions = null)
@@ -149,11 +181,14 @@ public class AnalyticsService(
 
         if (existing != null)
         {
+            logger.LogDebug("Updating existing metric: {Type} for {Date}, oldValue={OldValue}, newValue={NewValue}", 
+                type, date, existing.Value, value);
             existing.Value = value;
             existing.Dimensions = dimensions;
         }
         else
         {
+            logger.LogDebug("Creating new metric: {Type} for {Date}, value={Value}", type, date, value);
             authDb.DailySystemMetrics.Add(new DailySystemMetric
             {
                 Date = date,

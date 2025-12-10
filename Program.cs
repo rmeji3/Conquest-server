@@ -32,11 +32,34 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
+using Serilog;
+using Serilog.Events;
 
 // Load environment variables from .env file
 DotNetEnv.Env.Load();
 
+// --- Serilog Configuration ---
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore.Hosting", LogEventLevel.Information)
+    .MinimumLevel.Override("Microsoft.AspNetCore.Mvc", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .Enrich.WithMachineName()
+    .Enrich.WithEnvironmentName()
+    .WriteTo.Console(
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}      {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
+
+try
+{
+    Log.Information("Starting Conquest API server");
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Use Serilog for logging
+builder.Host.UseSerilog();
 
 // Override configuration with environment variables
 // ConnectionStrings
@@ -93,15 +116,19 @@ if (!string.IsNullOrEmpty(rateLimitPlaceCreation))
 
 
 
-// --- EF Core (SQLite) ---
-// change to postgres later for production
-// Auth (Identity tables)
-builder.Services.AddDbContext<AuthDbContext>(opt =>
-    opt.UseSqlite(builder.Configuration.GetConnectionString("AuthConnection")));
 
-// App (Places, Activities, etc.)
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlite(builder.Configuration.GetConnectionString("AppConnection")));
+// --- EF Core (SQLite) ---
+// Skip SQLite registration when in Testing environment (WebApplicationFactory will use InMemory)
+if (builder.Environment.EnvironmentName != "Testing")
+{
+    // Auth (Identity tables)
+    builder.Services.AddDbContext<AuthDbContext>(opt =>
+        opt.UseSqlite(builder.Configuration.GetConnectionString("AuthConnection")));
+
+    // App (Places, Activities, etc.)
+    builder.Services.AddDbContext<AppDbContext>(opt =>
+        opt.UseSqlite(builder.Configuration.GetConnectionString("AppConnection")));
+}
 
 // --- Identity ---
 builder.Services.AddIdentityCore<AppUser>(opt =>
@@ -115,27 +142,52 @@ builder.Services.AddIdentityCore<AppUser>(opt =>
 
 // --- JwtOptions bound from config ---
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
-var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+
+JwtOptions jwt;
+if (builder.Environment.EnvironmentName == "Testing")
+{
+    // Provide default JWT settings for testing
+    jwt = new JwtOptions 
+    { 
+        Key = "ThisIsATestSecretKeyForJWTMustBe32CharsLong!",
+        Issuer = "TestIssuer",
+        Audience = "TestAudience",
+        AccessTokenMinutes = 60
+    };
+}
+else
+{
+    jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
           ?? throw new InvalidOperationException("Missing Jwt config.");
+}
 
 // --- Token service ---
 builder.Services.AddScoped<ITokenService, TokenService>();
 
 // --- Redis ---
-builder.Services.AddStackExchangeRedisCache(options =>
+// Skip Redis in Testing environment (mocked by IntegrationTestFactory)
+if (builder.Environment.EnvironmentName != "Testing")
 {
-    options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
-    options.InstanceName = "Conquest:";
-});
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
+        options.InstanceName = "Conquest:";
+    });
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    {
+        var config = builder.Configuration.GetConnectionString("RedisConnection")
+            ?? throw new InvalidOperationException("Missing RedisConnection in configuration.");
+        return ConnectionMultiplexer.Connect(config);
+    });
+
+    builder.Services.AddScoped<IRedisService, RedisService>();
+}
+else
 {
-    var config = builder.Configuration.GetConnectionString("RedisConnection")
-        ?? throw new InvalidOperationException("Missing RedisConnection in configuration.");
-    return ConnectionMultiplexer.Connect(config);
-});
-
-builder.Services.AddScoped<IRedisService, RedisService>();
+    // In Testing environment, use in-memory cache
+    builder.Services.AddDistributedMemoryCache();
+}
 
 // --- Session with Redis ---
 builder.Services.AddSession(options =>
@@ -252,16 +304,9 @@ builder.Services.AddSwaggerGen(o =>
 
 var app = builder.Build();
 
-// --- Auto-migrate DB on startup (optional) ---
+// --- Seed Roles ---
 using (var scope = app.Services.CreateScope())
 {
-    var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-    authDb.Database.Migrate();
-
-    var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    appDb.Database.Migrate();
-
-    // --- Seed Roles ---
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     string[] roleNames = { "Admin", "User", "Business" };
     foreach (var roleName in roleNames)
@@ -276,6 +321,21 @@ using (var scope = app.Services.CreateScope())
 
 // --- Middleware ---
 app.UseMiddleware<Conquest.Middleware.GlobalExceptionHandler>();
+
+// Serilog request logging (logs all HTTP requests with timing)
+app.UseSerilogRequestLogging(options =>
+{
+    // Customize the message template
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
+    
+    // Attach additional properties to the request completion event
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("UserAgent", httpContext.Request.Headers["User-Agent"].FirstOrDefault());
+    };
+});
+
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -316,3 +376,14 @@ app.MapHealthChecks("/health");
 DotNetRuntimeStatsBuilder.Default().StartCollecting();
 
 app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+public partial class Program { }
