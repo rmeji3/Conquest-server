@@ -55,9 +55,9 @@ namespace Conquest.Data.App
 
             // ---------- Indexes ----------
 
-            // Place: coords index for nearby searches
-            builder.Entity<Place>()
-                .HasIndex(p => new { p.Latitude, p.Longitude });
+            // Place: Spatial index for nearby searches
+             builder.Entity<Place>()
+                 .HasIndex(p => p.Location);
 
             // Favorited: unique per user per place
             builder.Entity<Favorited>()

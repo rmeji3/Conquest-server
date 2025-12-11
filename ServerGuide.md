@@ -30,7 +30,7 @@ Conquest is an ASP.NET Core API (targeting .NET 9) that manages users, places, a
 - ASP.NET Core MVC + minimal hosting model
 - **Service Layer Architecture** ("Thin Controller, Fat Service" pattern)
 - Identity (custom `AppUser`) stored in `AuthDbContext` (SQLite)
-- Application domain stored in `AppDbContext` (SQLite)
+- Application domain stored in `AppDbContext` (SQLite + **NetTopologySuite** for geospatial)
 - JWT-based authentication
 - **Redis** for distributed caching, rate limiting, and session management
 - **Rate Limiting Middleware** for API protection
@@ -167,7 +167,7 @@ Seed Data:
 - `ActivityKind` seeded with ids 1–20 (Sports, Food, Outdoors, Art, etc.).
 
 Indexes:
-- `Place (Latitude, Longitude)` for geo bounding.
+- `Place (Location)` Spatial Index. NTS `Point` (SRID 4326).
 - Unique composite `Favorited (UserId, PlaceId)` prevents duplicate favorites.
 - Unique `ActivityKind.Name`.
 - Unique composite `PlaceActivity (PlaceId, Name)`.
@@ -196,7 +196,7 @@ Property Configuration:
 | AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason, LastLoginUtc         |(Friends)                              | Stored in Auth DB                                                                                                     |
 | IpBan         | IpAddress          | Reason, CreatedAt, ExpiresAt                                                                                             | (None)                                 | Stores banned IPs                                                                                                     |
 | Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
-| Place         | Id                 | Name, Address, Latitude, Longitude, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic and Google API usage |
+| Place         | Id                 | Name, Address, **Location (Point)**, Latitude*, Longitude*, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PlaceActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic; *Lat/Lon are computed props mapped to Location (SRID 4326) |
 | Favorited     | Id                 | UserId, PlaceId                                                                                                          | Place                                  | Unique per user per place; cascade deletes with Place                                                                 |
 | ActivityKind  | Id                 | Name                                                                                                                     | PlaceActivities                        | Seeded                                                                                                                |
 | PlaceActivity | Id                 | PlaceId, ActivityKindId?, Name, CreatedUtc                                                                               | Place, ActivityKind, Reviews, CheckIns | Unique per place by Name                                                                                              |
@@ -640,8 +640,8 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 
 ---
 ## 11. Indexes, Seed Data, Performance Notes
-- Geospatial queries use bounding box (approximate) before distance calculation (Haversine) filtered by radius.
-- Suggest future optimization: create a covering index on `(Latitude, Longitude, Visibility, Type)` if query frequency increases.
+- Geospatial queries use **NetTopologySuite** `IsWithinDistance` which leverages SQLite's R-Tree spatial index.
+- Distance logic: 1 degree approx 111km. Service handles conversion.
 - Event attendee queries are batched (N+1 fixed) in `EventMapper` to reduce database round-trips.
 - Review `IsLiked` status is batch-checked to avoid N+1 queries.
 

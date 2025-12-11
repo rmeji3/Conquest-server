@@ -11,8 +11,29 @@ namespace Conquest.Models.Places
         public required string Name { get; set; } = null!;
         [MaxLength(300)]
         public string? Address { get; set; }
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        public NetTopologySuite.Geometries.Point Location { get; set; } = null!;
+        
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public double Latitude 
+        { 
+            get => Location?.Y ?? 0; 
+            set 
+            {
+                if (Location == null) Location = new NetTopologySuite.Geometries.Point(0, value) { SRID = 4326 };
+                else Location.Y = value;
+            }
+        }
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public double Longitude 
+        { 
+            get => Location?.X ?? 0; 
+            set 
+            {
+                if (Location == null) Location = new NetTopologySuite.Geometries.Point(value, 0) { SRID = 4326 };
+                else Location.X = value;
+            }
+        }
         [MaxLength(100)]
         public string OwnerUserId { get; set; } = null!;
         public PlaceVisibility Visibility { get; set; } = PlaceVisibility.Private;

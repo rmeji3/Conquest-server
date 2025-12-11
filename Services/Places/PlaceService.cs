@@ -11,6 +11,7 @@ using Conquest.Services.Google;
 using Conquest.Services.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using NetTopologySuite.Geometries;
 
 namespace Conquest.Services.Places;
 
@@ -111,11 +112,11 @@ public class PlaceService(
                 // CUSTOM PLACE: Coordinates-based, wider tolerance (~50m)
                 // Duplicate check: BY COORDINATES ONLY
                 // 0.0005 degrees ~= 50-55 meters
+                var newPoint = new Point(dto.Longitude, dto.Latitude) { SRID = 4326 };
                 var existingCustom = await db.Places
                     .Where(p => p.Visibility == PlaceVisibility.Public &&
                                 p.Type == PlaceType.Custom &&
-                                Math.Abs(p.Latitude - dto.Latitude) < 0.0005 &&
-                                Math.Abs(p.Longitude - dto.Longitude) < 0.0005)
+                                p.Location.IsWithinDistance(newPoint, 0.0005))
                     .FirstOrDefaultAsync();
 
                 if (existingCustom != null)
@@ -283,13 +284,23 @@ public class PlaceService(
         PaginationParams pagination
     )
     {
-        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}, vis={Vis}, type={Type}", lat, lng, radiusKm, visibility, type);
+        // Create search point
+        var searchPoint = new Point(lng, lat) { SRID = 4326 };
+        
+        // Approximate degrees for radius (1 deg approx 111km)
+        // This is a rough estimation suitable for "nearby" logic
+        double radiusDegrees = radiusKm / 111.32;
+
+        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}km ({Deg} deg), vis={Vis}, type={Type}", lat, lng, radiusKm, radiusDegrees, visibility, type);
 
         var q = db.Places
         .Where(p => !p.IsDeleted)
         .Include(p => p.PlaceActivities)
             .ThenInclude(pa => pa.ActivityKind)
         .AsNoTracking();
+
+        // Spatial Filter
+        q = q.Where(p => p.Location.IsWithinDistance(searchPoint, radiusDegrees));
 
         // Filter by Visibility
         if (visibility.HasValue)
@@ -321,6 +332,13 @@ public class PlaceService(
             ));
         }
 
+        // Execute Query
+        // Note: Sort by distance is tricky in SQL/EF with NTS + SQLite.
+        // We will fetch results and sort in memory since pagination for "nearby" 
+        // usually fetches first page of closest items anyway.
+        // Optimally we'd do OrderBy(p.Location.Distance(searchPoint)) but EF core support varies.
+        // Let's retrieve and sort memory for now to be safe, assuming < 500-1000 items in radius.
+        
         var candidates = await q.ToListAsync();
 
         // Get Friend List if needed
@@ -337,9 +355,13 @@ public class PlaceService(
         {
             if (!IsVisibleToUser(p, userId, friendIds)) continue;
 
+            // Recalculate exact distance if needed or just use NTS distance (degrees)
+            // For UI display we often want meters/km. Let's use Haversine for display accuracy if we want Km.
+            // Or just use the already calculated IsWithinDistance filter for inclusion.
+            
+            // To be precise for user:
             var dist = DistanceKm(lat, lng, p.Latitude, p.Longitude);
-            if (dist > radiusKm) continue;
-
+            
             var dto = await ToPlaceDetailsDto(p, userId);
             withDistance.Add((dto, dist));
         }

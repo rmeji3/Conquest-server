@@ -132,7 +132,7 @@ if (builder.Environment.EnvironmentName != "Testing")
 
     // App (Places, Activities, etc.)
     builder.Services.AddDbContext<AppDbContext>(opt =>
-        opt.UseSqlite(builder.Configuration.GetConnectionString("AppConnection")));
+        opt.UseSqlite(builder.Configuration.GetConnectionString("AppConnection"), x => x.UseNetTopologySuite()));
 }
 
 // --- Identity ---

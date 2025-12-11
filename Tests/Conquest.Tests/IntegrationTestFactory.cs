@@ -8,6 +8,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Conquest.Data.Auth;
 using Conquest.Data.App;
 using StackExchange.Redis;
+using Moq;
 
 namespace Conquest.Tests;
 
@@ -60,15 +61,21 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
 
             // Replace IRedisService with Mock
             services.RemoveAll<Conquest.Services.Redis.IRedisService>();
-            services.AddScoped(_ => new Moq.Mock<Conquest.Services.Redis.IRedisService>().Object);
+            var mockRedis = new Moq.Mock<Conquest.Services.Redis.IRedisService>();
+            mockRedis.Setup(x => x.IncrementAsync(It.IsAny<string>(), It.IsAny<TimeSpan?>())).ReturnsAsync(1);
+            services.AddScoped(_ => mockRedis.Object);
 
             // Replace ISemanticService with Mock
             services.RemoveAll<Conquest.Services.AI.ISemanticService>();
-            services.AddScoped(_ => new Moq.Mock<Conquest.Services.AI.ISemanticService>().Object);
+            var mockSemantic = new Moq.Mock<Conquest.Services.AI.ISemanticService>();
+            mockSemantic.Setup(x => x.FindDuplicateAsync(It.IsAny<string>(), It.IsAny<IEnumerable<string>>())).ReturnsAsync((string?)null);
+            services.AddScoped(_ => mockSemantic.Object);
 
             // Replace IModerationService with Mock
             services.RemoveAll<Conquest.Services.Moderation.IModerationService>();
-            services.AddScoped(_ => new Moq.Mock<Conquest.Services.Moderation.IModerationService>().Object);
+            var mockModeration = new Moq.Mock<Conquest.Services.Moderation.IModerationService>();
+            mockModeration.Setup(x => x.CheckContentAsync(It.IsAny<string>())).ReturnsAsync(new Conquest.Services.Moderation.ModerationResult(false, ""));
+            services.AddScoped(_ => mockModeration.Object);
 
             // Add Mock IChatCompletionService
             services.AddSingleton(new Moq.Mock<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>().Object);
