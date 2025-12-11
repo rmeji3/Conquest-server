@@ -14,6 +14,9 @@ namespace Conquest.Tests;
 
 public class IntegrationTestFactory : WebApplicationFactory<Program>
 {
+    public string AuthDbName { get; } = "TestAuthDb_" + Guid.NewGuid();
+    public string AppDbName { get; } = "TestAppDb_" + Guid.NewGuid();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -41,12 +44,12 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
             // Add InMemory DbContexts
             services.AddDbContext<AuthDbContext>(options =>
             {
-                options.UseInMemoryDatabase("TestAuthDb_" + Guid.NewGuid().ToString());
+                options.UseInMemoryDatabase(AuthDbName);
             });
 
             services.AddDbContext<AppDbContext>(options =>
             {
-                options.UseInMemoryDatabase("TestAppDb_" + Guid.NewGuid().ToString());
+                options.UseInMemoryDatabase(AppDbName);
             });
 
             // Replace Redis with Mock (if not already skipped by Program.cs)
