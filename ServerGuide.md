@@ -464,7 +464,13 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | Method | Route                          | Auth | Body | Returns              | Notes                                               |
 | ------ | ------------------------------ | ---- | ---- | -------------------- | --------------------------------------------------- |
 | GET    | /api/profiles/me               | A    | —    | `PersonalProfileDto` | Current user profile                                |
+| POST   | /api/profiles/me/image         | A    | Form | `{ url: string }`    | Upload profile picture (Multipart/Form-Data)        |
 | GET    | /api/profiles/search?username= | A    | —    | `ProfileDto[]`       | Prefix search on normalized username; excludes self |
+| GET    | /api/profiles/{id}             | A    | —    | `ProfileDto`         | Full public profile details                         |
+| GET    | /api/profiles/{id}/summary     | A    | —    | `QuickProfileDto`    | Lightweight profile summary for headers/cards       |
+| GET    | /api/profiles/{id}/places      | A    | —    | `PaginatedResult`    | Places created by user (respects privacy)           |
+| GET    | /api/profiles/{id}/reviews     | A    | —    | `PaginatedResult`    | Reviews by user (respects privacy)                  |
+| GET    | /api/profiles/{id}/events      | A    | —    | `PaginatedResult`    | Events created by user (respects privacy)           |
 
 ### ReportsController (`/api/reports`)
 | Method | Route           | Auth | Body               | Returns              | Notes                                               |
@@ -902,33 +908,36 @@ All errors follow the ProblemDetails format:
 - Content moderation: "Content rejected: Hate/Harassment."
 
 ---
-## 19. Suggested Future Enhancements
+## 19. Planned Features & Roadmap
 
-**High Priority:**
-- ✅ ~~PlaceType feature (Verified vs Custom)~~ - COMPLETED
-- ✅ ~~Review likes with `IsLiked` flag~~ - COMPLETED
-- ✅ ~~Redis integration for rate limiting~~ - COMPLETED
-- ✅ ~~AI Recommendations (Semantic Kernel + Google Fallback)~~ - COMPLETED
-- ✅ ~~CheckIns feature implementation~~ - COMPLETED (Merged into Reviews)
-- ✅ ~~Soft delete for Places with historical review preservation~~ - COMPLETED
-- ✅ ~~Enhanced Favorites (Counter + History)~~ - COMPLETED
-- ✅ ~~Implement tag moderation system (approval/banning workflow, endpoints)~~ - COMPLETED
-- ✅ ~~AI Content Moderation (Reviews, Activities, Places)~~ - COMPLETED
-- ✅ ~~Semantic Deduplication (Activities)~~ - COMPLETED
-- ✅ ~~User Blocking & Content Filtering~~ - COMPLETED
-- Normalize and validate rating range (1–5) at DTO/model layer
+**Feature Roadmap:**
 
-**Medium Priority:**
-- Email service for password reset (production)
-- ✅ ~~Pagination improvements for large list endpoints~~ - COMPLETED
-- WebSocket support for real-time event updates
-- Profile picture upload functionality
+### 1. Communication & Notifications
+- **Email Service**: Transactional emails for welcome, email verification, and password reset flows (replacing dev-only tokens).
+- **Push Notifications**: Real-time alerts for:
+  - Friend requests/accepts
+  - Event invites and updates
+  - Review likes/replies
+  - "Nearby" recommendations
 
-**Performance:**
-- Consider PostGIS for advanced geospatial queries
-- Add covering index: `(Latitude, Longitude, Visibility, Type)`
-- Implement response caching for public data
-- Redis cache invalidation strategy for frequently updated data
+### 2. Search & Discovery
+- **Enhanced Search**: 
+  - Full-text search improvement (Elasticsearch or Postgres Full-Text if migrating).
+  - Hybrid search (Keyword + Semantic) for Places and Events.
+- **Geospatial Database**: 
+  - Migration to PostGIS (PostgreSQL) or similar for strictly superior spatial querying capabilities (knn, shapes, clustering).
+
+### 3. Authentication & Identity
+- **OAuth Providers**: 
+  - "Sign in with Google"
+  - "Sign in with Apple"
+- **Device Management**: View and revoke active sessions.
+
+### 4. Architecture Standards
+- **Distributed Tracing**: Implementation of OpenTelemetry for full observability across services.
+- **Background Jobs**: Integration of Hangfire or Quartz.NET for reliable async task processing (email sending, image processing, periodic cleanup).
+- **CDN**: Integration for serving user content (images) globally.
+- **CI/CD**: Github Actions pipelines for automated testing and deployment.
 
 ---
 ## 20. Agent Usage Notes
