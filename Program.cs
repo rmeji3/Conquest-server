@@ -123,17 +123,33 @@ if (!string.IsNullOrEmpty(rateLimitPlaceCreation))
 
 
 
-// --- EF Core (SQLite) ---
-// Skip SQLite registration when in Testing environment (WebApplicationFactory will use InMemory)
+// --- EF Core (SQLite / PostgreSQL Hybrid) ---
+// Skip DB registration when in Testing environment (WebApplicationFactory will use InMemory)
 if (builder.Environment.EnvironmentName != "Testing")
 {
-    // Auth (Identity tables)
-    builder.Services.AddDbContext<AuthDbContext>(opt =>
-        opt.UseSqlite(builder.Configuration.GetConnectionString("AuthConnection")));
+    var provider = builder.Configuration["DatabaseProvider"] ?? "Sqlite";
+    var authConn = builder.Configuration.GetConnectionString("AuthConnection");
+    var appConn = builder.Configuration.GetConnectionString("AppConnection");
 
-    // App (Places, Activities, etc.)
-    builder.Services.AddDbContext<AppDbContext>(opt =>
-        opt.UseSqlite(builder.Configuration.GetConnectionString("AppConnection"), x => x.UseNetTopologySuite()));
+    if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        // Auth (Identity tables)
+        builder.Services.AddDbContext<AuthDbContext>(opt =>
+            opt.UseNpgsql(authConn));
+
+        // App (Places, Activities, etc.) - With NetTopologySuite
+        builder.Services.AddDbContext<AppDbContext>(opt =>
+            opt.UseNpgsql(appConn, x => x.UseNetTopologySuite()));
+    }
+    else
+    {
+        // Default to SQLite
+        builder.Services.AddDbContext<AuthDbContext>(opt =>
+            opt.UseSqlite(authConn));
+
+        builder.Services.AddDbContext<AppDbContext>(opt =>
+            opt.UseSqlite(appConn, x => x.UseNetTopologySuite()));
+    }
 }
 
 // --- Identity ---

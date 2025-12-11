@@ -7,6 +7,8 @@ using Conquest.Models.Reports;
 using Conquest.Models.Users;
 using Conquest.Models.Business;
 using Conquest.Models;
+using NpgsqlTypes; // For NpgsqlTsVector
+using Npgsql.EntityFrameworkCore.PostgreSQL; // For HasGeneratedTsVectorColumn extensions
 
 namespace Conquest.Data.App
 {
@@ -90,7 +92,7 @@ namespace Conquest.Data.App
                 .HasIndex(r => new { r.PlaceActivityId, r.UserId });
 
             builder.Entity<Review>()
-                .ToTable(t => t.HasCheckConstraint("CK_Review_Rating", "Rating >= 1 AND Rating <= 5"));
+                .ToTable(t => t.HasCheckConstraint("CK_Review_Rating", "\"Rating\" >= 1 AND \"Rating\" <= 5"));
 
             builder.Entity<Review>()
                 .ToTable(t => t.HasCheckConstraint("CK_Review_Content", "length(\"Content\") <= 1000"));
@@ -180,7 +182,6 @@ namespace Conquest.Data.App
 
 
             // ---------- Events / Attendees ----------
-
             builder.Entity<EventAttendee>()
                 .HasKey(ea => new { ea.EventId, ea.UserId });
 
@@ -189,6 +190,21 @@ namespace Conquest.Data.App
                 .WithMany(e => e.Attendees)
                 .HasForeignKey(ea => ea.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ---------- PostgreSQL Specific (Full Text Search) ----------
+            // Only apply when running against Postgres
+            if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                 // Full-Text Search Vector for Places (Name + Address)
+                 // We use a shadow property so we don't pollute the domain model
+                 builder.Entity<Place>()
+                     .Property<NpgsqlTsVector>("SearchVector")
+                     .HasComputedColumnSql("to_tsvector('english', coalesce(\"Name\", '') || ' ' || coalesce(\"Address\", ''))", stored: true);
+
+                 builder.Entity<Place>()
+                     .HasIndex("SearchVector")
+                     .HasMethod("GIN");
+            }
         }
     }
 }
