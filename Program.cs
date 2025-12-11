@@ -133,6 +133,8 @@ if (builder.Environment.EnvironmentName != "Testing")
 
     if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
     {
+        Log.Information("Using Database Provider: PostgreSQL");
+        
         // Auth (Identity tables)
         builder.Services.AddDbContext<AuthDbContext>(opt =>
             opt.UseNpgsql(authConn));
@@ -143,6 +145,8 @@ if (builder.Environment.EnvironmentName != "Testing")
     }
     else
     {
+        Log.Information("Using Database Provider: SQLite");
+
         // Default to SQLite
         builder.Services.AddDbContext<AuthDbContext>(opt =>
             opt.UseSqlite(authConn));
@@ -396,6 +400,26 @@ using (var scope = app.Services.CreateScope())
     else
     {
         logger.LogError("✗ Redis connection failed - rate limiting and caching will not work");
+    }
+    
+    // Check Database Connections
+    try
+    {
+        var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        if (await authDb.Database.CanConnectAsync())
+            logger.LogInformation("✓ Auth Database connected successfully");
+        else
+            logger.LogError("✗ Auth Database connection failed");
+            
+        var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        if (await appDb.Database.CanConnectAsync())
+            logger.LogInformation("✓ App Database connected successfully");
+        else
+            logger.LogError("✗ App Database connection failed");
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "🔥 Critical Error connecting to Database");
     }
 }
 
