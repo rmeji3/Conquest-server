@@ -386,6 +386,22 @@ public class AuthService(
         }
     }
 
+    public async Task RemoveAdminAsync(string email)
+    {
+        var user = await users.FindByEmailAsync(email);
+        if (user == null) throw new KeyNotFoundException($"User with email {email} not found.");
+
+        if (await users.IsInRoleAsync(user, "Admin"))
+        {
+            await users.RemoveFromRoleAsync(user, "Admin");
+            logger.LogInformation("User {Email} demoted from Admin.", email);
+        }
+        else
+        {
+            logger.LogInformation("User {Email} is not an Admin.", email);
+        }
+    }
+
     public async Task<AuthResponse> VerifyEmailAsync(VerifyEmailDto dto)
     {
         var redisKey = $"email_verification:{dto.Email}";

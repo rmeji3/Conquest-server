@@ -142,5 +142,50 @@ namespace Conquest.Services.Moderation
             logger.LogInformation("Checking report threshold for {UserId} (Not fully implemented yet)", userId);
             await Task.CompletedTask;
         }
+        public async Task<Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>> GetBannedUsersAsync(int page = 1, int limit = 20)
+        {
+             var query = context.Users.Where(u => u.IsBanned);
+             var total = await query.CountAsync();
+             
+             var items = await query
+                .OrderByDescending(u => u.BanCount) // Ordered by ban count or whatever makes sense
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .Select(u => new Conquest.Dtos.Moderation.BannedUserDto(
+                    u.Id,
+                    u.UserName!,
+                    u.Email!,
+                    u.BanReason,
+                    u.BanCount
+                ))
+                .ToListAsync();
+
+             return new Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>(items, total, page, limit);
+        }
+
+        public async Task<Conquest.Dtos.Moderation.BannedUserDto?> GetBannedUserAsync(string? userId = null, string? username = null, string? email = null)
+        {
+            var query = context.Users.AsQueryable();
+            if (userId != null) query = query.Where(u => u.Id == userId);
+            else if (username != null) query = query.Where(u => u.NormalizedUserName == username.ToUpper());
+            else if (email != null) query = query.Where(u => u.NormalizedEmail == email.ToUpper());
+            else return null;
+
+            // Also check if they are actually banned? The requirement says "specific banned user".
+            // If we find a user but they aren't banned, should we return null or the user?
+            // Convention: GetBannedUser implies they must be banned.
+            query = query.Where(u => u.IsBanned);
+
+            var user = await query.FirstOrDefaultAsync();
+            if (user == null) return null;
+
+            return new Conquest.Dtos.Moderation.BannedUserDto(
+                user.Id,
+                user.UserName!,
+                user.Email!,
+                user.BanReason,
+                user.BanCount
+            );
+        }
     }
 }

@@ -154,6 +154,41 @@ namespace Conquest.Controllers
             }
         }
 
+        [HttpPost("users/remove-admin")]
+        public async Task<IActionResult> RemoveAdmin([FromQuery] string email)
+        {
+            try 
+            {
+                await authService.RemoveAdminAsync(email);
+                return Ok(new { message = $"User {email} is no longer an Admin." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+        [HttpGet("users/banned")]
+        public async Task<IActionResult> GetBannedUsers(
+            [FromQuery] int page = 1, 
+            [FromQuery] int limit = 20,
+            [FromQuery] string? userId = null,
+            [FromQuery] string? username = null,
+            [FromQuery] string? email = null)
+        {
+            // If searching for specific user
+            if (!string.IsNullOrWhiteSpace(userId) || !string.IsNullOrWhiteSpace(username) || !string.IsNullOrWhiteSpace(email))
+            {
+                var user = await banningService.GetBannedUserAsync(userId, username, email);
+                if (user == null) return NotFound("Banned user not found matching the criteria.");
+                return Ok(user);
+            }
+
+            // Otherwise list all
+            var result = await banningService.GetBannedUsersAsync(page, limit);
+            return Ok(result);
+        }
+
         [HttpPost("moderation/ip/ban")]
         public async Task<IActionResult> BanIp([FromBody] IpBanRequest request)
         {

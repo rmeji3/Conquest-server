@@ -27,7 +27,7 @@ public class BaseIntegrationTest : IClassFixture<IntegrationTestFactory>
         appDb.Database.EnsureCreated();
     }
 
-    protected string Authenticate(string username)
+    protected string Authenticate(string username, string role = "User")
     {
         // For integration tests, we can simply simulate a token or login.
         // But since we mocked JWT config in Factory, we can generate a valid token manually
@@ -43,7 +43,7 @@ public class BaseIntegrationTest : IClassFixture<IntegrationTestFactory>
         {
             new(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
             new(System.Security.Claims.ClaimTypes.Name, username),
-            new(System.Security.Claims.ClaimTypes.Role, "User")
+            new(System.Security.Claims.ClaimTypes.Role, role)
         };
 
         var key = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes("ThisIsATestSecretKeyForJWTMustBe32CharsLong!"));

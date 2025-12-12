@@ -15,5 +15,6 @@ public interface IAuthService
     Task<string> ResetPasswordAsync(ResetPasswordDto dto);
     Task<string> ChangePasswordAsync(string userId, ChangePasswordDto dto);
     Task MakeAdminAsync(string email);
+    Task RemoveAdminAsync(string email);
     Task DeleteAccountAsync(string userId);
 }

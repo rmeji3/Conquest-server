@@ -10,5 +10,7 @@ namespace Conquest.Services.Moderation
         Task UnbanIpAsync(string ip, string? adminId = null);
         Task<(bool IsBanned, string? Reason)> CheckBanAsync(string ip, string? userId = null);
         Task CheckReportThresholdAsync(string userId);
+        Task<Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>> GetBannedUsersAsync(int page = 1, int limit = 20);
+        Task<Conquest.Dtos.Moderation.BannedUserDto?> GetBannedUserAsync(string? userId = null, string? username = null, string? email = null);
     }
 }
