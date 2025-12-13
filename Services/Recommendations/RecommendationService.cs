@@ -121,13 +121,12 @@ public class RecommendationService(
 
     private async Task<List<Place>> SearchLocalDatabaseAsync(List<string> searchTerms, double lat, double lng, double radiusKm)
     {
-        // 1 degree latitude is approx 111 km
-        var degrees = radiusKm / 111.0;
+        // Create a point for the center (PostGIS uses Longitude, Latitude order, verify SRID matches)
+        var center = new NetTopologySuite.Geometries.Point(lng, lat) { SRID = 4326 };
         
-        var minLat = lat - degrees;
-        var maxLat = lat + degrees;
-        var minLng = lng - degrees;
-        var maxLng = lng + degrees;
+        // IsWithinDistance uses the units of the projection. For 4326, it is degrees.
+        // Approx conversion: 1 degree ~ 111 km.
+        var distanceDegrees = radiusKm / 111.0;
 
         var query = dbContext.Places
             .Include(p => p.PlaceActivities)
@@ -136,8 +135,7 @@ public class RecommendationService(
                 .ThenInclude(pa => pa.Reviews)
                     .ThenInclude(r => r.ReviewTags)
                         .ThenInclude(rt => rt.Tag)
-            .Where(p => p.Latitude >= minLat && p.Latitude <= maxLat && 
-                        p.Longitude >= minLng && p.Longitude <= maxLng);
+            .Where(p => p.Location.IsWithinDistance(center, distanceDegrees));
 
         var nearbyPlaces = await query.ToListAsync();
 
