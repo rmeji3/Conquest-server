@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Recommendations;
+namespace Ping.Dtos.Recommendations;
 
 public class RecommendationDto
 {
@@ -9,3 +9,4 @@ public class RecommendationDto
     public string Source { get; set; } = "Local"; // "Local" or "Google"
     public int? LocalPlaceId { get; set; } // ID if it's a local place
 }
+

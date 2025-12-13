@@ -1,16 +1,16 @@
-﻿using Conquest.Models.Activities;
-using Conquest.Models.Events;
-using Conquest.Models.Places;
+using Ping.Models.Activities;
+using Ping.Models.Events;
+using Ping.Models.Places;
 using Microsoft.EntityFrameworkCore;
-using Conquest.Models.Reviews;
-using Conquest.Models.Reports;
-using Conquest.Models.Users;
-using Conquest.Models.Business;
-using Conquest.Models;
+using Ping.Models.Reviews;
+using Ping.Models.Reports;
+using Ping.Models.Users;
+using Ping.Models.Business;
+using Ping.Models;
 using NpgsqlTypes; // For NpgsqlTsVector
 using Npgsql.EntityFrameworkCore.PostgreSQL; // For HasGeneratedTsVectorColumn extensions
 
-namespace Conquest.Data.App
+namespace Ping.Data.App
 {
     public class AppDbContext(DbContextOptions<AppDbContext> opt) : DbContext(opt)
     {
@@ -208,3 +208,4 @@ namespace Conquest.Data.App
         }
     }
 }
+

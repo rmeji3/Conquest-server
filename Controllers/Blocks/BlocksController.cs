@@ -1,11 +1,11 @@
-using Conquest.Models.AppUsers;
-using Conquest.Services.Blocks;
+using Ping.Models.AppUsers;
+using Ping.Services.Blocks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using System.Security.Claims;
 
-namespace Conquest.Controllers.Blocks
+namespace Ping.Controllers.Blocks
 {
     [ApiController]
     [ApiVersion("1.0")]
@@ -52,3 +52,4 @@ namespace Conquest.Controllers.Blocks
         }
     }
 }
+

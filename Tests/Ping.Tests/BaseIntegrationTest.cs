@@ -1,9 +1,9 @@
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
-using Conquest.Data.Auth;
-using Conquest.Data.App;
+using Ping.Data.Auth;
+using Ping.Data.App;
 
-namespace Conquest.Tests;
+namespace Ping.Tests;
 
 public class BaseIntegrationTest : IClassFixture<IntegrationTestFactory>
 {
@@ -62,3 +62,4 @@ public class BaseIntegrationTest : IClassFixture<IntegrationTestFactory>
         return userId;
     }
 }
+

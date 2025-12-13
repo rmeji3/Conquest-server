@@ -1,8 +1,8 @@
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Places;
-using Conquest.Models.Places;
+using Ping.Dtos.Common;
+using Ping.Dtos.Places;
+using Ping.Models.Places;
 
-namespace Conquest.Services.Places;
+namespace Ping.Services.Places;
 
 public interface IPlaceService
 {
@@ -17,3 +17,4 @@ public interface IPlaceService
     Task AddFavoriteAsync(int id, string userId);
     Task UnfavoriteAsync(int id, string userId);
 }
+

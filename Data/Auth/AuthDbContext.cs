@@ -1,18 +1,18 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Friends;
-using Conquest.Models.Users; // Added for UserBlock
+using Ping.Models.AppUsers;
+using Ping.Models.Friends;
+using Ping.Models.Users; // Added for UserBlock
 
-namespace Conquest.Data.Auth
+namespace Ping.Data.Auth
 {
     public class AuthDbContext(DbContextOptions<AuthDbContext> options) : IdentityDbContext<AppUser>(options)
     {
         public DbSet<Friendship> Friendships => Set<Friendship>();
         public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
         public DbSet<IpBan> IpBans => Set<IpBan>();
-        public DbSet<Conquest.Models.Analytics.UserActivityLog> UserActivityLogs => Set<Conquest.Models.Analytics.UserActivityLog>();
-        public DbSet<Conquest.Models.Analytics.DailySystemMetric> DailySystemMetrics => Set<Conquest.Models.Analytics.DailySystemMetric>();
+        public DbSet<Ping.Models.Analytics.UserActivityLog> UserActivityLogs => Set<Ping.Models.Analytics.UserActivityLog>();
+        public DbSet<Ping.Models.Analytics.DailySystemMetric> DailySystemMetrics => Set<Ping.Models.Analytics.DailySystemMetric>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -56,15 +56,16 @@ namespace Conquest.Data.Auth
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Analytics
-            builder.Entity<Conquest.Models.Analytics.UserActivityLog>()
+            builder.Entity<Ping.Models.Analytics.UserActivityLog>()
                 .HasIndex(l => new { l.UserId, l.Date })
                 .IsUnique(); // One log per user per day
 
-             builder.Entity<Conquest.Models.Analytics.UserActivityLog>()
+             builder.Entity<Ping.Models.Analytics.UserActivityLog>()
                 .HasIndex(l => l.Date); // Optimize aggregation by date
 
-            builder.Entity<Conquest.Models.Analytics.DailySystemMetric>()
+            builder.Entity<Ping.Models.Analytics.DailySystemMetric>()
                 .HasIndex(m => m.Date);
         }
     }
 }
+

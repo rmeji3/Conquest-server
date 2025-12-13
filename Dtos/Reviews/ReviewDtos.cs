@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Conquest.Dtos.Reviews;
+namespace Ping.Dtos.Reviews;
 
 public record ReviewDto(
     int Id,

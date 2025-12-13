@@ -1,7 +1,7 @@
 using System.Text.Json;
 using StackExchange.Redis;
 
-namespace Conquest.Services.Redis;
+namespace Ping.Services.Redis;
 
 /// <summary>
 /// Redis service implementation using StackExchange.Redis.
@@ -11,7 +11,7 @@ public class RedisService : IRedisService
     private readonly IConnectionMultiplexer _redis;
     private readonly IDatabase _db;
     private readonly ILogger<RedisService> _logger;
-    private const string KeyPrefix = "Conquest:";
+    private const string KeyPrefix = "Ping:";
 
     public RedisService(IConnectionMultiplexer redis, ILogger<RedisService> logger)
     {
@@ -120,3 +120,4 @@ public class RedisService : IRedisService
 
     private static string GetPrefixedKey(string key) => $"{KeyPrefix}{key}";
 }
+

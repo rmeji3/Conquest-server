@@ -1,7 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
-using Conquest.Models.Places;
+using System.ComponentModel.DataAnnotations;
+using Ping.Models.Places;
 
-namespace Conquest.Models.Activities
+namespace Ping.Models.Activities
 {
     public class ActivityKind
     {
@@ -14,3 +14,4 @@ namespace Conquest.Models.Activities
     }
 
 }
+

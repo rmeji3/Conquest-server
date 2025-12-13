@@ -1,12 +1,12 @@
-﻿using Conquest.Dtos.Common;
-using Conquest.Dtos.Friends;
-using Conquest.Services.Friends;
+using Ping.Dtos.Common;
+using Ping.Dtos.Friends;
+using Ping.Services.Friends;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using System.Security.Claims;
 
-namespace Conquest.Controllers
+namespace Ping.Controllers
 {
     [ApiVersion("1.0")]
     [Route("api/[controller]")]
@@ -108,3 +108,4 @@ namespace Conquest.Controllers
         }
     }
 }
+

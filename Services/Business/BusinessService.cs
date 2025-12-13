@@ -1,12 +1,12 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Business;
-using Conquest.Models.Business;
-using Conquest.Models.Places;
+using Ping.Data.App;
+using Ping.Dtos.Business;
+using Ping.Models.Business;
+using Ping.Models.Places;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
-using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Services
+namespace Ping.Services
 {
     public class BusinessService : IBusinessService
     {
@@ -122,3 +122,4 @@ namespace Conquest.Services
         }
     }
 }
+

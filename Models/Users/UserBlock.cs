@@ -1,6 +1,6 @@
-using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Models.Users
+namespace Ping.Models.Users
 {
     public class UserBlock
     {
@@ -13,3 +13,4 @@ namespace Conquest.Models.Users
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

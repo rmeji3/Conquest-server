@@ -1,17 +1,17 @@
 using System.Security.Claims;
-using Conquest.Dtos.Profiles;
-using Conquest.Services.Profiles;
-using Conquest.Services.Reviews;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Reviews;
-using Conquest.Dtos.Places;
-using Conquest.Dtos.Events;
+using Ping.Dtos.Profiles;
+using Ping.Services.Profiles;
+using Ping.Services.Reviews;
+using Ping.Dtos.Common;
+using Ping.Dtos.Reviews;
+using Ping.Dtos.Places;
+using Ping.Dtos.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
-using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Controllers.Profiles
+namespace Ping.Controllers.Profiles
 {
 
     [ApiController]

@@ -1,10 +1,10 @@
 using System;
 using System.Threading.Tasks;
-using Conquest.Dtos.Common;
-using Conquest.DTOs.Reports;
-using Conquest.Models.Reports;
+using Ping.Dtos.Common;
+using Ping.DTOs.Reports;
+using Ping.Models.Reports;
 
-namespace Conquest.Services.Reports
+namespace Ping.Services.Reports
 {
     public interface IReportService
     {
@@ -12,3 +12,4 @@ namespace Conquest.Services.Reports
         Task<PaginatedResult<Report>> GetReportsAsync(PaginationParams pagination, ReportStatus? status = null);
     }
 }
+

@@ -1,27 +1,27 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Reviews;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Reviews;
+using Ping.Data.App;
+using Ping.Dtos.Common;
+using Ping.Dtos.Reviews;
+using Ping.Models.AppUsers;
+using Ping.Models.Reviews;
 using Microsoft.AspNetCore.Identity;
-using Conquest.Services.Friends;
-using Conquest.Utils;
+using Ping.Services.Friends;
+using Ping.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Conquest.Models.Places;
+using Ping.Models.Places;
 
-using Conquest.Services.Blocks;
+using Ping.Services.Blocks;
 
-using Conquest.Services.Notifications;
-using Conquest.Models;
+using Ping.Services.Notifications;
+using Ping.Models;
 
-namespace Conquest.Services.Reviews;
+namespace Ping.Services.Reviews;
 
 public class ReviewService(
     AppDbContext appDb,
     IFriendService friendService,
     UserManager<AppUser> userManager,
-    Conquest.Services.Moderation.IModerationService moderationService,
+    Ping.Services.Moderation.IModerationService moderationService,
     IBlockService blockService,
     INotificationService notificationService,
     ILogger<ReviewService> logger) : IReviewService
@@ -732,3 +732,4 @@ public class ReviewService(
         }
     }
 }
+

@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Analytics;
+namespace Ping.Dtos.Analytics;
 
 public record DashboardStatsDto(
     int Dau,
@@ -22,3 +22,4 @@ public record ModerationStatsDto(
     int BannedIps,
     int RejectedReviews // If we tracked this, currently might need to count logic
 );
+

@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 
-namespace Conquest.Models.AppUsers
+namespace Ping.Models.AppUsers
 {
     public class AppUser : IdentityUser
     {
@@ -34,3 +34,4 @@ namespace Conquest.Models.AppUsers
         Private = 2
     }
 }
+

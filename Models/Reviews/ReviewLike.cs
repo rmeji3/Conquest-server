@@ -1,4 +1,4 @@
-namespace Conquest.Models.Reviews;
+namespace Ping.Models.Reviews;
 
 public class ReviewLike
 {

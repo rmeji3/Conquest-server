@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using Conquest.Models.Reviews;
-using Conquest.Models.Activities;
+using Ping.Models.Reviews;
+using Ping.Models.Activities;
 
-namespace Conquest.Models.Places;
+namespace Ping.Models.Places;
 
 public class PlaceActivity
 {
@@ -22,3 +22,4 @@ public class PlaceActivity
     
     public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
 }
+

@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Conquest.Middleware;
+namespace Ping.Middleware;
 
 public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHostEnvironment env) : IMiddleware
 {
@@ -36,3 +36,4 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHos
         await context.Response.WriteAsync(json);
     }
 }
+

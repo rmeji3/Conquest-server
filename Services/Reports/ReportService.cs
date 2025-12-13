@@ -1,12 +1,12 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Conquest.Data.App;
-using Conquest.Dtos.Common;
-using Conquest.DTOs.Reports;
-using Conquest.Models.Reports;
+using Ping.Data.App;
+using Ping.Dtos.Common;
+using Ping.DTOs.Reports;
+using Ping.Models.Reports;
 
-namespace Conquest.Services.Reports
+namespace Ping.Services.Reports
 {
     public class ReportService(AppDbContext context) : IReportService
     {
@@ -44,3 +44,4 @@ namespace Conquest.Services.Reports
         }
     }
 }
+

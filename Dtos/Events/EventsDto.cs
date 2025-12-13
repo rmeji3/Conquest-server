@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Events;
+namespace Ping.Dtos.Events;
 
 public record EventDto(
     int Id,
@@ -61,3 +61,4 @@ public class UpdateEventDto
     public double? Longitude { get; set; }
     public int? PlaceId { get; set; }
 }
+

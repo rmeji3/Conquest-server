@@ -1,6 +1,6 @@
-using Conquest.Models;
+using Ping.Models;
 
-namespace Conquest.Services.Notifications;
+namespace Ping.Services.Notifications;
 
 public interface INotificationService
 {
@@ -10,3 +10,4 @@ public interface INotificationService
     Task MarkAsReadAsync(string userId, string notificationId);
     Task MarkAllAsReadAsync(string userId);
 }
+

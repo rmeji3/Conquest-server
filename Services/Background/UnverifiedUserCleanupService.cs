@@ -1,10 +1,10 @@
-using Conquest.Data.Auth;
+using Ping.Data.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Background;
+namespace Ping.Services.Background;
 
 public class UnverifiedUserCleanupService : BackgroundService
 {
@@ -66,3 +66,4 @@ public class UnverifiedUserCleanupService : BackgroundService
         }
     }
 }
+

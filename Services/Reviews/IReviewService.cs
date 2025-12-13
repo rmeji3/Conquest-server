@@ -1,7 +1,7 @@
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Reviews;
+using Ping.Dtos.Common;
+using Ping.Dtos.Reviews;
 
-namespace Conquest.Services.Reviews;
+namespace Ping.Services.Reviews;
 
 public interface IReviewService
 {
@@ -16,3 +16,4 @@ public interface IReviewService
     Task<PaginatedResult<ExploreReviewDto>> GetFriendsFeedAsync(string userId, PaginationParams pagination);
     Task DeleteReviewAsAdminAsync(int id);
 }
+

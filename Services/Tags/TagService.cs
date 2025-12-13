@@ -1,10 +1,10 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Tags;
-using Conquest.Models.Reviews;
+using Ping.Data.App;
+using Ping.Dtos.Tags;
+using Ping.Models.Reviews;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Tags;
+namespace Ping.Services.Tags;
 
 public class TagService(AppDbContext db, ILogger<TagService> logger) : ITagService
 {
@@ -150,3 +150,4 @@ public class TagService(AppDbContext db, ILogger<TagService> logger) : ITagServi
         }
     }
 }
+

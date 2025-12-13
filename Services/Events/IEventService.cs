@@ -1,9 +1,9 @@
 
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Events;
-using Conquest.Models.Events;
+using Ping.Dtos.Common;
+using Ping.Dtos.Events;
+using Ping.Models.Events;
 
-namespace Conquest.Services.Events;
+namespace Ping.Services.Events;
 
 public interface IEventService
 {
@@ -21,3 +21,4 @@ public interface IEventService
     Task<bool> UninviteUserAsync(int eventId, string requesterId, string targetUserId);
     Task<bool> LeaveEventAsync(int id, string userId);
 }
+

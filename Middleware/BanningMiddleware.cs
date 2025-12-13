@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using Conquest.Services.Moderation;
+using Ping.Services.Moderation;
 
-namespace Conquest.Middleware;
+namespace Ping.Middleware;
 
 public class BanningMiddleware(IBanningService banningService, ILogger<BanningMiddleware> logger) : IMiddleware
 {
@@ -46,3 +46,4 @@ public class BanningMiddleware(IBanningService banningService, ILogger<BanningMi
         return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 }
+

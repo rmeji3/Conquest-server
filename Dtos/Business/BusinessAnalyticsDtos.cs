@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Business;
+namespace Ping.Dtos.Business;
 
 public record BusinessPlaceAnalyticsDto(
     int PlaceId,
@@ -15,3 +15,4 @@ public record PlaceDailyStatDto(
     DateOnly Date,
     int Value
 );
+

@@ -1,4 +1,4 @@
-namespace Conquest.Models.Events;
+namespace Ping.Models.Events;
 
 public class EventAttendee
 {
@@ -18,3 +18,4 @@ public enum AttendeeStatus
     Declined,
     Maybe
 }
+

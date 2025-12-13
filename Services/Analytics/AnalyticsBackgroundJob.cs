@@ -2,7 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Analytics;
+namespace Ping.Services.Analytics;
 
 public class AnalyticsBackgroundJob(
     IServiceScopeFactory scopeFactory,
@@ -45,3 +45,4 @@ public class AnalyticsBackgroundJob(
         }
     }
 }
+

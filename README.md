@@ -1,6 +1,6 @@
-# Conquest Server
+# Ping Server
 
-Conquest is an ASP.NET Core API for managing users, places, activities, events, and friendships.
+Ping is an ASP.NET Core API for managing users, places, activities, events, and friendships.
 
 ## 📚 Documentation
 
@@ -12,10 +12,10 @@ Conquest is an ASP.NET Core API for managing users, places, activities, events, 
 - [.NET 9.0.308](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - **Redis**
-    - `docker run -d --name redis-conquest -p 6379:6379 redis:latest`
+    - `docker run -d --name redis-Ping -p 6379:6379 redis:latest`
 - **Monitoring** (Prometheus & Grafana) - *Optional*
     - Run `docker-compose up -d`
-- env variables in [`.env`](.env) from [secrets github](https://github.com/rmeji3/Conquest-Secrets/tree/main)
+- env variables in [`.env`](.env) from [secrets github](https://github.com/rmeji3/Ping-Secrets/tree/main)
     - Connection Strings
         - AUTH_CONNECTION=
         - APP_CONNECTION=
@@ -102,15 +102,16 @@ Or you can run:
 We use xUnit + Microsoft.AspNetCore.Mvc.Testing for integration testing.
 
 ### Infrastructure
-Tests/Conquest.Tests: Main test project.
+Tests/Ping.Tests: Main test project.
 IntegrationTestFactory: WebApplicationFactory customization that replaces the database with InMemory providers for isolation.
 BaseIntegrationTest: Base class creating HttpClient and handling auth.
 
 ### How to Run
-``` powershell dotnet test Tests/Conquest.Tests ```
+``` powershell dotnet test Tests/Ping.Tests ```
 
 ### Writing Tests
 Inherit BaseIntegrationTest. The factory ensures a fresh server instance (logic-wise) and cleanable DBs.
+
 
 
 

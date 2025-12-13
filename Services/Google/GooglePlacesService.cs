@@ -2,7 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Google;
+namespace Ping.Services.Google;
 
 public class GooglePlacesService(HttpClient httpClient, IConfiguration config, ILogger<GooglePlacesService> logger) : IPlaceNameService
 {
@@ -178,3 +178,4 @@ public class GooglePlacesService(HttpClient httpClient, IConfiguration config, I
         }
     }
 }
+

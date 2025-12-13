@@ -1,10 +1,10 @@
-using Conquest.Data.App;
-using Conquest.Models.Business;
+using Ping.Data.App;
+using Ping.Models.Business;
 using Microsoft.EntityFrameworkCore;
-using Conquest.Dtos.Business;
-using Conquest.Models.Reviews;
+using Ping.Dtos.Business;
+using Ping.Models.Reviews;
 
-namespace Conquest.Services.Business;
+namespace Ping.Services.Business;
 
 public interface IBusinessAnalyticsService
 {
@@ -124,3 +124,4 @@ public class BusinessAnalyticsService(AppDbContext db, ILogger<BusinessAnalytics
         );
     }
 }
+

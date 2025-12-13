@@ -1,11 +1,11 @@
 using System.Security.Claims;
-using Conquest.Dtos.Reviews;
-using Conquest.Services.Reviews;
+using Ping.Dtos.Reviews;
+using Ping.Services.Reviews;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
-using Conquest.Dtos.Common;
+using Ping.Dtos.Common;
 
-namespace Conquest.Controllers.Reviews
+namespace Ping.Controllers.Reviews
 {
 
     [ApiController]

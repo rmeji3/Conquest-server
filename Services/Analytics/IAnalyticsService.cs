@@ -1,7 +1,7 @@
-using Conquest.Models.Analytics;
-using Conquest.Dtos.Analytics;
+using Ping.Models.Analytics;
+using Ping.Dtos.Analytics;
 
-namespace Conquest.Services.Analytics;
+namespace Ping.Services.Analytics;
 
 public interface IAnalyticsService
 {
@@ -12,3 +12,4 @@ public interface IAnalyticsService
     Task ComputeDailyMetricsAsync(DateOnly date);
     Task<List<DailySystemMetric>> GetGrowthByRegionAsync(); 
 }
+

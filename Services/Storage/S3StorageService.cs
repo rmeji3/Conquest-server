@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Storage;
+namespace Ping.Services.Storage;
 
 public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration, ILogger<S3StorageService> logger) : IStorageService
 {
@@ -78,3 +78,4 @@ public class S3StorageService(IAmazonS3 s3Client, IConfiguration configuration, 
         }
     }
 }
+

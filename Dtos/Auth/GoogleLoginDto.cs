@@ -1,3 +1,4 @@
-namespace Conquest.Dtos.Auth;
+namespace Ping.Dtos.Auth;
 
 public record GoogleLoginDto(string IdToken);
+

@@ -2,7 +2,7 @@ using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 
-namespace Conquest.Services.Google;
+namespace Ping.Services.Google;
 
 public class GoogleAuthService
 {
@@ -38,3 +38,4 @@ public class GoogleAuthService
         }
     }
 }
+

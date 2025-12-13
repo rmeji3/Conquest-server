@@ -1,8 +1,8 @@
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Friends;
-using Conquest.Models.Friends;
+using Ping.Dtos.Common;
+using Ping.Dtos.Friends;
+using Ping.Models.Friends;
 
-namespace Conquest.Services.Friends;
+namespace Ping.Services.Friends;
 
 public interface IFriendService
 {

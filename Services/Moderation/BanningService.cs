@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Conquest.Data.Auth;
-using Conquest.Models.Users;
-using Conquest.Services.Redis;
+using Ping.Data.Auth;
+using Ping.Models.Users;
+using Ping.Services.Redis;
 
-namespace Conquest.Services.Moderation
+namespace Ping.Services.Moderation
 {
     public class BanningService(
         AuthDbContext context,
@@ -142,7 +142,7 @@ namespace Conquest.Services.Moderation
             logger.LogInformation("Checking report threshold for {UserId} (Not fully implemented yet)", userId);
             await Task.CompletedTask;
         }
-        public async Task<Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>> GetBannedUsersAsync(int page = 1, int limit = 20)
+        public async Task<Ping.Dtos.Common.PagedResult<Ping.Dtos.Moderation.BannedUserDto>> GetBannedUsersAsync(int page = 1, int limit = 20)
         {
              var query = context.Users.Where(u => u.IsBanned);
              var total = await query.CountAsync();
@@ -151,7 +151,7 @@ namespace Conquest.Services.Moderation
                 .OrderByDescending(u => u.BanCount) // Ordered by ban count or whatever makes sense
                 .Skip((page - 1) * limit)
                 .Take(limit)
-                .Select(u => new Conquest.Dtos.Moderation.BannedUserDto(
+                .Select(u => new Ping.Dtos.Moderation.BannedUserDto(
                     u.Id,
                     u.UserName!,
                     u.Email!,
@@ -160,10 +160,10 @@ namespace Conquest.Services.Moderation
                 ))
                 .ToListAsync();
 
-             return new Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>(items, total, page, limit);
+             return new Ping.Dtos.Common.PagedResult<Ping.Dtos.Moderation.BannedUserDto>(items, total, page, limit);
         }
 
-        public async Task<Conquest.Dtos.Moderation.BannedUserDto?> GetBannedUserAsync(string? userId = null, string? username = null, string? email = null)
+        public async Task<Ping.Dtos.Moderation.BannedUserDto?> GetBannedUserAsync(string? userId = null, string? username = null, string? email = null)
         {
             var query = context.Users.AsQueryable();
             if (userId != null) query = query.Where(u => u.Id == userId);
@@ -179,7 +179,7 @@ namespace Conquest.Services.Moderation
             var user = await query.FirstOrDefaultAsync();
             if (user == null) return null;
 
-            return new Conquest.Dtos.Moderation.BannedUserDto(
+            return new Ping.Dtos.Moderation.BannedUserDto(
                 user.Id,
                 user.UserName!,
                 user.Email!,
@@ -189,3 +189,4 @@ namespace Conquest.Services.Moderation
         }
     }
 }
+

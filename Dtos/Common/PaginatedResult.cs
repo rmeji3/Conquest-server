@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Common;
+namespace Ping.Dtos.Common;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -17,3 +17,4 @@ public class PaginatedResult<T>(IEnumerable<T> items, int count, int pageNumber,
         return new PaginatedResult<T>(items, count, pageNumber, pageSize);
     }
 }
+

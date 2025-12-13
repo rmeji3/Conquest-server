@@ -1,11 +1,11 @@
-using Conquest.Data.App;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Users;
+using Ping.Data.App;
+using Ping.Models.AppUsers;
+using Ping.Models.Users;
 using Microsoft.EntityFrameworkCore;
 
-using Conquest.Data.Auth;
+using Ping.Data.Auth;
 
-namespace Conquest.Services.Blocks
+namespace Ping.Services.Blocks
 {
     public class BlockService(AuthDbContext authDb) : IBlockService
     {
@@ -87,3 +87,4 @@ namespace Conquest.Services.Blocks
         }
     }
 }
+

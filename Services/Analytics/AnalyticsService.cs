@@ -1,17 +1,17 @@
-using Conquest.Data.App;
-using Conquest.Data.Auth;
-using Conquest.Dtos.Analytics;
-using Conquest.Models.Analytics; // For DailySystemMetric, UserActivityLog
+using Ping.Data.App;
+using Ping.Data.Auth;
+using Ping.Dtos.Analytics;
+using Ping.Models.Analytics; // For DailySystemMetric, UserActivityLog
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Conquest.Models.AppUsers; // For AppUser
-using Conquest.Models; // For Place, Review, etc.
-using Conquest.Models.Reviews;
-using Conquest.Models.Reports;
+using Ping.Models.AppUsers; // For AppUser
+using Ping.Models; // For Place, Review, etc.
+using Ping.Models.Reviews;
+using Ping.Models.Reports;
 
-using Conquest.Models.Places;
+using Ping.Models.Places;
 
-namespace Conquest.Services.Analytics;
+namespace Ping.Services.Analytics;
 
 public class AnalyticsService(
     AuthDbContext authDb,
@@ -200,3 +200,4 @@ public class AnalyticsService(
         await authDb.SaveChangesAsync();
     }
 }
+

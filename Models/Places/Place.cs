@@ -1,8 +1,8 @@
-﻿using System.ComponentModel.DataAnnotations;
-using Conquest.Models.Activities;
-using Conquest.Models.Reviews;
+using System.ComponentModel.DataAnnotations;
+using Ping.Models.Activities;
+using Ping.Models.Reviews;
 
-namespace Conquest.Models.Places
+namespace Ping.Models.Places
 {
     public class Place
     {
@@ -48,3 +48,4 @@ namespace Conquest.Models.Places
         public ICollection<Favorited> FavoritedList { get; set; } = [];
     }
 }
+

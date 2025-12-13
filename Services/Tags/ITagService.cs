@@ -1,6 +1,6 @@
-using Conquest.Dtos.Tags;
+using Ping.Dtos.Tags;
 
-namespace Conquest.Services.Tags;
+namespace Ping.Services.Tags;
 
 public interface ITagService
 {
@@ -11,3 +11,4 @@ public interface ITagService
     Task MergeTagAsync(int sourceId, int targetId);
     Task DeleteTagAsAdminAsync(int id);
 }
+

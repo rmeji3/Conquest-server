@@ -1,4 +1,4 @@
-﻿namespace Conquest.Dtos.Auth
+namespace Ping.Dtos.Auth
 {
     using Models.AppUsers;
     using System.ComponentModel.DataAnnotations;
@@ -60,3 +60,4 @@
 
     public record AuthResponse(string AccessToken, DateTime ExpiresUtc, UserDto User);
 }
+

@@ -1,9 +1,9 @@
-using Conquest.Services.Analytics;
+using Ping.Services.Analytics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Admin;
+namespace Ping.Controllers.Admin;
 
 [ApiController]
 [ApiVersion("1.0")]
@@ -55,3 +55,4 @@ public class AdminAnalyticsController(IAnalyticsService analytics) : ControllerB
         return Ok("Metrics computed for today.");
     }
 }
+

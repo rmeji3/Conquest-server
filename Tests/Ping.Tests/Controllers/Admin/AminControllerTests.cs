@@ -3,10 +3,10 @@ using Xunit.Abstractions;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http.Json;
-using Conquest.Dtos.Auth;
+using Ping.Dtos.Auth;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Conquest.Tests.Controllers.Admin;
+namespace Ping.Tests.Controllers.Admin;
 
 public class AdminControllerTests : BaseIntegrationTest
 {
@@ -98,7 +98,7 @@ public class AdminControllerTests : BaseIntegrationTest
         Assert.Equal(HttpStatusCode.Unauthorized, loginResponse.StatusCode);
         
         // 4. check if user is banned
-        var searchBanned = await _client.GetFromJsonAsync<Conquest.Dtos.Moderation.BannedUserDto>($"/api/admin/users/banned?username={userRequest.UserName}");
+        var searchBanned = await _client.GetFromJsonAsync<Ping.Dtos.Moderation.BannedUserDto>($"/api/admin/users/banned?username={userRequest.UserName}");
         Assert.NotNull(searchBanned);
         Assert.Equal(userRequest.UserName.ToUpper(), searchBanned.Username.ToUpper()); 
     }
@@ -148,15 +148,16 @@ public class AdminControllerTests : BaseIntegrationTest
 
         // Act & Assert
         // 3. List banned users
-        var listResponse = await _client.GetFromJsonAsync<Conquest.Dtos.Common.PagedResult<Conquest.Dtos.Moderation.BannedUserDto>>("/api/admin/users/banned");
+        var listResponse = await _client.GetFromJsonAsync<Ping.Dtos.Common.PagedResult<Ping.Dtos.Moderation.BannedUserDto>>("/api/admin/users/banned");
         Assert.NotNull(listResponse);
         
         // use assert.contains to check if listResponse.Items contains userRequest.UserName
         Assert.Contains(listResponse.Items, u => u.Username == userRequest.UserName);
         // 4. Get specific banned user by username
-        var userResponse3 = await _client.GetFromJsonAsync<Conquest.Dtos.Moderation.BannedUserDto>($"/api/admin/users/banned?username={userRequest.UserName}");
+        var userResponse3 = await _client.GetFromJsonAsync<Ping.Dtos.Moderation.BannedUserDto>($"/api/admin/users/banned?username={userRequest.UserName}");
         Assert.NotNull(userResponse3);
         Assert.Equal(userRequest.UserName.ToUpper(), userResponse3.Username.ToUpper());
         Assert.Equal("Testing", userResponse3.BanReason);
     }
 }
+

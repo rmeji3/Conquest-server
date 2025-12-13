@@ -1,21 +1,21 @@
-﻿using Conquest.Dtos.Activities;
-using Conquest.Dtos.Common;
+using Ping.Dtos.Activities;
+using Ping.Dtos.Common;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
-using Conquest.Dtos.Places;
-using Conquest.Models.Places;
-using Conquest.Services.Places;
+using Ping.Dtos.Places;
+using Ping.Models.Places;
+using Ping.Services.Places;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Places
+namespace Ping.Controllers.Places
 {
     [ApiController]
     [ApiVersion("1.0")]
     [Route("api/[controller]")]
     [Route("api/v{version:apiVersion}/[controller]")]
     [Authorize]
-    public class PlacesController(IPlaceService placeService, Conquest.Services.Business.IBusinessAnalyticsService analyticsService) : ControllerBase
+    public class PlacesController(IPlaceService placeService, Ping.Services.Business.IBusinessAnalyticsService analyticsService) : ControllerBase
     {
         // POST /api/places
         [HttpPost]
@@ -168,3 +168,4 @@ namespace Conquest.Controllers.Places
         }
     }
 }
+

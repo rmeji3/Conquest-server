@@ -1,8 +1,8 @@
 using System.Security.Claims;
-using Conquest.Services.Redis;
+using Ping.Services.Redis;
 using Microsoft.Extensions.Primitives;
 
-namespace Conquest.Middleware;
+namespace Ping.Middleware;
 
 /// <summary>
 /// Rate limiting middleware using Redis for distributed rate limiting.
@@ -124,3 +124,4 @@ public class RateLimitMiddleware : IMiddleware
         return new DateTimeOffset(startOfNextMinute).ToUnixTimeSeconds();
     }
 }
+

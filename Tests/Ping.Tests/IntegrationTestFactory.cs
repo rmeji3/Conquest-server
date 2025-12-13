@@ -5,12 +5,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Distributed;
-using Conquest.Data.Auth;
-using Conquest.Data.App;
+using Ping.Data.Auth;
+using Ping.Data.App;
 using StackExchange.Redis;
 using Moq;
 
-namespace Conquest.Tests;
+namespace Ping.Tests;
 
 public class IntegrationTestFactory : WebApplicationFactory<Program>
 {
@@ -63,42 +63,42 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
             services.AddDistributedMemoryCache();
 
             // Replace IRedisService with Mock
-            services.RemoveAll<Conquest.Services.Redis.IRedisService>();
-            var mockRedis = new Moq.Mock<Conquest.Services.Redis.IRedisService>();
+            services.RemoveAll<Ping.Services.Redis.IRedisService>();
+            var mockRedis = new Moq.Mock<Ping.Services.Redis.IRedisService>();
             mockRedis.Setup(x => x.IncrementAsync(It.IsAny<string>(), It.IsAny<TimeSpan?>())).ReturnsAsync(1);
             services.AddScoped(_ => mockRedis.Object);
 
             // Replace ISemanticService with Mock
-            services.RemoveAll<Conquest.Services.AI.ISemanticService>();
-            var mockSemantic = new Moq.Mock<Conquest.Services.AI.ISemanticService>();
+            services.RemoveAll<Ping.Services.AI.ISemanticService>();
+            var mockSemantic = new Moq.Mock<Ping.Services.AI.ISemanticService>();
             mockSemantic.Setup(x => x.FindDuplicateAsync(It.IsAny<string>(), It.IsAny<IEnumerable<string>>())).ReturnsAsync((string?)null);
             services.AddScoped(_ => mockSemantic.Object);
 
             // Replace IModerationService with Mock
-            services.RemoveAll<Conquest.Services.Moderation.IModerationService>();
-            var mockModeration = new Moq.Mock<Conquest.Services.Moderation.IModerationService>();
-            mockModeration.Setup(x => x.CheckContentAsync(It.IsAny<string>())).ReturnsAsync(new Conquest.Services.Moderation.ModerationResult(false, ""));
+            services.RemoveAll<Ping.Services.Moderation.IModerationService>();
+            var mockModeration = new Moq.Mock<Ping.Services.Moderation.IModerationService>();
+            mockModeration.Setup(x => x.CheckContentAsync(It.IsAny<string>())).ReturnsAsync(new Ping.Services.Moderation.ModerationResult(false, ""));
             services.AddScoped(_ => mockModeration.Object);
 
             // Add Mock IChatCompletionService
             services.AddSingleton(new Moq.Mock<Microsoft.SemanticKernel.ChatCompletion.IChatCompletionService>().Object);
 
             // Mock GoogleAuthService
-            services.RemoveAll<Conquest.Services.Google.GoogleAuthService>();
+            services.RemoveAll<Ping.Services.Google.GoogleAuthService>();
             // GoogleAuthService(IConfiguration)
-            var mockGoogle = new Moq.Mock<Conquest.Services.Google.GoogleAuthService>(
+            var mockGoogle = new Moq.Mock<Ping.Services.Google.GoogleAuthService>(
                 new Moq.Mock<Microsoft.Extensions.Configuration.IConfiguration>().Object
             );
             services.AddScoped(_ => mockGoogle.Object);
 
             // Mock AppleAuthService
-            services.RemoveAll<Conquest.Services.Apple.AppleAuthService>();
+            services.RemoveAll<Ping.Services.Apple.AppleAuthService>();
             // AppleAuthService(IHttpClientFactory, IMemoryCache, IConfiguration)
             var mockCache = new Moq.Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             var mockClientFactory = new Moq.Mock<IHttpClientFactory>();
             mockClientFactory.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(new HttpClient());
 
-            var mockApple = new Moq.Mock<Conquest.Services.Apple.AppleAuthService>(
+            var mockApple = new Moq.Mock<Ping.Services.Apple.AppleAuthService>(
                 mockClientFactory.Object,
                 mockCache.Object,
                 new Moq.Mock<Microsoft.Extensions.Configuration.IConfiguration>().Object
@@ -106,15 +106,16 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
             services.AddScoped(_ => mockApple.Object);
 
             // Mock IEmailService
-            services.RemoveAll<Conquest.Services.Email.IEmailService>();
-            var mockEmail = new Moq.Mock<Conquest.Services.Email.IEmailService>();
+            services.RemoveAll<Ping.Services.Email.IEmailService>();
+            var mockEmail = new Moq.Mock<Ping.Services.Email.IEmailService>();
             services.AddScoped(_ => mockEmail.Object);
 
             // Mock IStorageService
-            services.RemoveAll<Conquest.Services.Storage.IStorageService>();
-            var mockStorage = new Moq.Mock<Conquest.Services.Storage.IStorageService>();
+            services.RemoveAll<Ping.Services.Storage.IStorageService>();
+            var mockStorage = new Moq.Mock<Ping.Services.Storage.IStorageService>();
             mockStorage.Setup(x => x.UploadFileAsync(It.IsAny<Microsoft.AspNetCore.Http.IFormFile>(), It.IsAny<string>())).ReturnsAsync("https://mock-s3.com/file.jpg");
             services.AddScoped(_ => mockStorage.Object);
         });
     }
 }
+

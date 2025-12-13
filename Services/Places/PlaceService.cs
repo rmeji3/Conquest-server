@@ -1,19 +1,19 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Activities;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Places;
-using Conquest.Models.Places;
-using Conquest.Models.Business;
-using Conquest.Utils;
-using Conquest.Models.Reviews;
-using Conquest.Services.Friends;
-using Conquest.Services.Google;
-using Conquest.Services.Redis;
+using Ping.Data.App;
+using Ping.Dtos.Activities;
+using Ping.Dtos.Common;
+using Ping.Dtos.Places;
+using Ping.Models.Places;
+using Ping.Models.Business;
+using Ping.Utils;
+using Ping.Models.Reviews;
+using Ping.Services.Friends;
+using Ping.Services.Google;
+using Ping.Services.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 
-namespace Conquest.Services.Places;
+namespace Ping.Services.Places;
 
 public class PlaceService(
     AppDbContext db,
@@ -568,3 +568,4 @@ public class PlaceService(
         );
     }
 }
+

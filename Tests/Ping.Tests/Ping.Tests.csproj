@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Conquest-server.csproj" />
+    <ProjectReference Include="..\..\Ping.csproj" />
   </ItemGroup>
 
 </Project>

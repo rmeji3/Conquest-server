@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using Conquest.Models.Places;
+using Ping.Models.Places;
 
-namespace Conquest.Models.Reviews;
+namespace Ping.Models.Reviews;
 
 public class Review
 {
@@ -26,3 +26,4 @@ public class Review
     [MaxLength(500)]
     public string ImageUrl { get; set; } = null!;
 }
+

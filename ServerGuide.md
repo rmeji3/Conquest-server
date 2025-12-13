@@ -1,4 +1,4 @@
-# Conquest Server Guide
+# Ping Server Guide
 
 Comprehensive internal documentation of the current server codebase. This guide is designed to give an AI agent (and developers) full context of the project structure: endpoints, models, DTOs, services, data contexts, and architectural decisions.
 
@@ -27,7 +27,7 @@ Comprehensive internal documentation of the current server codebase. This guide 
 
 ---
 ## 1. Overview
-Conquest is an ASP.NET Core API (targeting .NET 9) that manages users, places, activities at places, events, friendships, and reviews. It uses:
+Ping is an ASP.NET Core API (targeting .NET 9) that manages users, places, activities at places, events, friendships, and reviews. It uses:
 - ASP.NET Core MVC + minimal hosting model
 - **Service Layer Architecture** ("Thin Controller, Fat Service" pattern)
 - Identity (custom `AppUser`) stored in `AuthDbContext` (SQLite)
@@ -93,8 +93,8 @@ Required `appsettings.json` keys:
   },
   "Jwt": {
     "Key": "[secret-key-minimum-32-chars]",
-    "Issuer": "ConquestAPI",
-    "Audience": "ConquestApp",
+    "Issuer": "PingAPI",
+    "Audience": "PingApp",
     "AccessTokenMinutes": 60
   },
   "Google": {
@@ -684,21 +684,21 @@ We maintain **separate migration folders** for SQLite and PostgreSQL.
 ```bash
 # Set provider in .env or shell
 $env:DatabaseProvider='Postgres' 
-dotnet ef migrations add <Name> --context Conquest.Data.Auth.AuthDbContext --output-dir Data/Auth/Migrations/Postgres
-dotnet ef database update --context Conquest.Data.Auth.AuthDbContext
+dotnet ef migrations add <Name> --context Ping.Data.Auth.AuthDbContext --output-dir Data/Auth/Migrations/Postgres
+dotnet ef database update --context Ping.Data.Auth.AuthDbContext
 
-dotnet ef migrations add <Name> --context Conquest.Data.App.AppDbContext --output-dir Data/App/Migrations/Postgres
-dotnet ef database update --context Conquest.Data.App.AppDbContext
+dotnet ef migrations add <Name> --context Ping.Data.App.AppDbContext --output-dir Data/App/Migrations/Postgres
+dotnet ef database update --context Ping.Data.App.AppDbContext
 ```
 
 **SQLite (Local):**
 ```bash
 # Default provider
-dotnet ef migrations add <Name> --context Conquest.Data.Auth.AuthDbContext
-dotnet ef database update --context Conquest.Data.Auth.AuthDbContext
+dotnet ef migrations add <Name> --context Ping.Data.Auth.AuthDbContext
+dotnet ef database update --context Ping.Data.Auth.AuthDbContext
 
-dotnet ef migrations add <Name> --context Conquest.Data.App.AppDbContext
-dotnet ef database update --context Conquest.Data.App.AppDbContext
+dotnet ef migrations add <Name> --context Ping.Data.App.AppDbContext
+dotnet ef database update --context Ping.Data.App.AppDbContext
 ```
 
 ---
@@ -746,14 +746,14 @@ Development settings (`appsettings.Development.json`):
 **Implementation Details**:
 - Uses `StackExchange.Redis` (v2.9.32)
 - JSON serialization for complex objects
-- Automatic key prefixing: `Conquest:{key}`
+- Automatic key prefixing: `Ping:{key}`
 - Connection multiplexing (singleton `IConnectionMultiplexer`)
 - Error logging with graceful degradation
 
 ### Key Naming Conventions
 - Rate limiting: `ratelimit:{clientId}:{timeWindow}`
 - Place creation: `ratelimit:place:create:{userId}:{date}`
-- Session data: `Conquest:{sessionId}`
+- Session data: `Ping:{sessionId}`
 
 ### Health Check
 On startup, `Program.cs` logs Redis connection status:
@@ -761,7 +761,7 @@ On startup, `Program.cs` logs Redis connection status:
 - ✗ Failure: "Redis connection failed - rate limiting and caching will not work"
 
 ### Deployment Notes
-- **Local Development**: Docker container (`docker run -d --name conquest-redis -p 6379:6379 redis:alpine`)
+- **Local Development**: Docker container (`docker run -d --name Ping-redis -p 6379:6379 redis:alpine`)
 - **Production**: AWS ElastiCache for Redis or Azure Cache for Redis recommended
 - **Fail-Fast**: Application requires Redis to be available for security-critical rate limiting
 
@@ -907,7 +907,7 @@ Enriched with: `RequestHost`, `UserAgent`.
 
 **Startup/Shutdown**:
 - Application wrapped in try-catch-finally for clean shutdown
-- Startup: `Log.Information("Starting Conquest API server")`
+- Startup: `Log.Information("Starting Ping API server")`
 - Fatal errors logged before exit
 - `Log.CloseAndFlush()` ensures all logs are written before process exits
 
@@ -1019,13 +1019,13 @@ When generating or modifying code:
 We use `xUnit` + `Microsoft.AspNetCore.Mvc.Testing` for integration testing.
 
 ### Infrastructure
-- **Tests/Conquest.Tests**: Main test project.
+- **Tests/Ping.Tests**: Main test project.
 - **IntegrationTestFactory**: `WebApplicationFactory` customization that replaces the database with `InMemory` providers for isolation.
 - **BaseIntegrationTest**: Base class creating `HttpClient` and handling auth.
 
 ### How to Run
 ```bash
-dotnet test Tests/Conquest.Tests
+dotnet test Tests/Ping.Tests
 ```
 
 ### Writing Tests
@@ -1033,3 +1033,4 @@ Inherit `BaseIntegrationTest`. The factory ensures a fresh server instance (logi
 
 ---
 End of guide.
+

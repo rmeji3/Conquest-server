@@ -3,16 +3,16 @@ using Xunit.Abstractions;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http.Json;
-using Conquest.Dtos.Places;
-using Conquest.Models.Places;
-using Conquest.Dtos.Activities;
+using Ping.Dtos.Places;
+using Ping.Models.Places;
+using Ping.Dtos.Activities;
 
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 
-namespace Conquest.Tests.Controllers.Activities;
+namespace Ping.Tests.Controllers.Activities;
 
 public class ActivityServiceTests : BaseIntegrationTest
 {
@@ -32,8 +32,8 @@ public class ActivityServiceTests : BaseIntegrationTest
         {
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<Conquest.Services.AI.ISemanticService>();
-                var mockSemantic = new Mock<Conquest.Services.AI.ISemanticService>();
+                services.RemoveAll<Ping.Services.AI.ISemanticService>();
+                var mockSemantic = new Mock<Ping.Services.AI.ISemanticService>();
                 
                 // When "Soccer" is added, if "Playing Soccer" exists, return "Playing Soccer" as the duplicate
                 mockSemantic.Setup(x => x.FindDuplicateAsync(
@@ -104,3 +104,4 @@ public class ActivityServiceTests : BaseIntegrationTest
         Assert.Equal(activity1.Id, activity2.Id);
     }
 }
+

@@ -1,9 +1,9 @@
-﻿using Conquest.Dtos.Activities;
-using Conquest.Services.Activities;
+using Ping.Dtos.Activities;
+using Ping.Services.Activities;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Activities
+namespace Ping.Controllers.Activities
 {
     [ApiController]
     [ApiVersion("1.0")]
@@ -34,3 +34,4 @@ namespace Conquest.Controllers.Activities
         }
     }
 }
+

@@ -1,8 +1,8 @@
-﻿using Conquest.Dtos.Activities;
-using Conquest.Models.Places;
-using Conquest.Models.Business;
+using Ping.Dtos.Activities;
+using Ping.Models.Places;
+using Ping.Models.Business;
 
-namespace Conquest.Dtos.Places
+namespace Ping.Dtos.Places
 {
     public record UpsertPlaceDto(string Name, string? Address, double Latitude, double Longitude, PlaceVisibility Visibility, PlaceType Type);
     public record PlaceDetailsDto(
@@ -23,3 +23,4 @@ namespace Conquest.Dtos.Places
         );
 
 }
+

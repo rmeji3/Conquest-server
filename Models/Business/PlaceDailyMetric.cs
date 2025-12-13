@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using Conquest.Models.Places;
+using Ping.Models.Places;
 
-namespace Conquest.Models.Business;
+namespace Ping.Models.Business;
 
 public class PlaceDailyMetric
 {
@@ -14,3 +14,4 @@ public class PlaceDailyMetric
 
     public int ViewCount { get; set; }
 }
+

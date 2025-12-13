@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Conquest.Models;
+namespace Ping.Models;
 
 public enum NotificationType
 {
@@ -45,3 +45,4 @@ public class Notification
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+

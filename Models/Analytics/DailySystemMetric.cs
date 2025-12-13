@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Conquest.Models.Analytics
+namespace Ping.Models.Analytics
 {
     public class DailySystemMetric
     {
@@ -21,3 +21,4 @@ namespace Conquest.Models.Analytics
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }
+

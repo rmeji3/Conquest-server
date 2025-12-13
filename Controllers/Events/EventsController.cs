@@ -1,12 +1,12 @@
 using System.Security.Claims;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Events;
-using Conquest.Services.Events;
+using Ping.Dtos.Common;
+using Ping.Dtos.Events;
+using Ping.Services.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Events
+namespace Ping.Controllers.Events
 {
     [ApiController]
     [ApiVersion("1.0")]

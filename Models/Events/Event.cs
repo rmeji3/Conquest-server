@@ -1,6 +1,6 @@
-using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Models.Events;
+namespace Ping.Models.Events;
 
 public class Event
 {
@@ -27,5 +27,5 @@ public class Event
     public required double Longitude { get; set;  }
 
     public int? PlaceId { get; set; }
-    public Conquest.Models.Places.Place? Place { get; set; }
+    public Ping.Models.Places.Place? Place { get; set; }
 }

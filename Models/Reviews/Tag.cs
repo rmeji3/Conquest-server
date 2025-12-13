@@ -1,4 +1,4 @@
-namespace Conquest.Models.Reviews;
+namespace Ping.Models.Reviews;
 
 public class Tag
 {
@@ -14,3 +14,4 @@ public class Tag
     // nav
     public List<ReviewTag> ReviewTags { get; set; } = [];
 }
+

@@ -1,14 +1,14 @@
-using Conquest.Data.App;
-using Conquest.Models;
-using Conquest.Services.Notifications;
-using Conquest.Services.Redis;
+using Ping.Data.App;
+using Ping.Models;
+using Ping.Services.Notifications;
+using Ping.Services.Redis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace Conquest.Tests.Services;
+namespace Ping.Tests.Services;
 
 public class NotificationServiceTests
 {
@@ -111,3 +111,4 @@ public class NotificationServiceTests
         Assert.Equal(2, count);
     }
 }
+

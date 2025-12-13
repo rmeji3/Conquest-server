@@ -1,16 +1,16 @@
-using Conquest.Data.App;
-using Conquest.Data.Auth;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Events;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Events;
-using Conquest.Services.Moderation;
-using Conquest.Utils;
+using Ping.Data.App;
+using Ping.Data.Auth;
+using Ping.Dtos.Common;
+using Ping.Dtos.Events;
+using Ping.Models.AppUsers;
+using Ping.Models.Events;
+using Ping.Services.Moderation;
+using Ping.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Events;
+namespace Ping.Services.Events;
 
 public class EventService(
     AppDbContext appDb,
@@ -480,3 +480,4 @@ public class EventService(
         return new PaginatedResult<EventDto>(dtos, count, pagination.PageNumber, pagination.PageSize);
     }
 }
+

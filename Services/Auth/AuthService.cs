@@ -1,29 +1,29 @@
-using Conquest.Dtos.Auth;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Analytics;
+using Ping.Dtos.Auth;
+using Ping.Models.AppUsers;
+using Ping.Models.Analytics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text;
-using Conquest.Services.Moderation;
+using Ping.Services.Moderation;
 
-namespace Conquest.Services.Auth;
+namespace Ping.Services.Auth;
 
 public class AuthService(
     UserManager<AppUser> users,
     SignInManager<AppUser> signIn,
     ITokenService tokens,
-    Conquest.Data.Auth.AuthDbContext db,
+    Ping.Data.Auth.AuthDbContext db,
     IHostEnvironment env,
     ILogger<AuthService> logger,
     IModerationService moderationService,
-    Conquest.Services.Email.IEmailService emailService,
+    Ping.Services.Email.IEmailService emailService,
     Microsoft.Extensions.Configuration.IConfiguration config,
-    Conquest.Services.Google.GoogleAuthService googleAuthService,
-    Conquest.Services.Apple.AppleAuthService appleAuthService,
-    Conquest.Services.Redis.IRedisService redis) : IAuthService
+    Ping.Services.Google.GoogleAuthService googleAuthService,
+    Ping.Services.Apple.AppleAuthService appleAuthService,
+    Ping.Services.Redis.IRedisService redis) : IAuthService
 {
     public async Task<object> RegisterAsync(RegisterDto dto)
     {
@@ -305,7 +305,7 @@ public class AuthService(
         // Send email
         await emailService.SendEmailAsync(
             dto.Email, 
-            "Reset your Conquest password", 
+            "Reset your Ping password", 
             $"Your password reset code is: <b>{code}</b>. It expires in 15 minutes."
         );
 
@@ -468,7 +468,7 @@ public class AuthService(
         // Send email
         await emailService.SendEmailAsync(
             user.Email!, 
-            "Verify your Conquest account", 
+            "Verify your Ping account", 
             $"Your verification code is: <b>{code}</b>. It expires in 24 hours."
         );
         
@@ -492,3 +492,4 @@ public class AuthService(
         logger.LogInformation("User account deleted: {UserId}", userId);
     }
 }
+

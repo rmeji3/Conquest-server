@@ -1,13 +1,13 @@
-using Conquest.Dtos.Business;
-using Conquest.Models.Business;
-using Conquest.Services;
-using Conquest.Services.Business;
+using Ping.Dtos.Business;
+using Ping.Models.Business;
+using Ping.Services;
+using Ping.Services.Business;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using System.Security.Claims;
 
-namespace Conquest.Controllers
+namespace Ping.Controllers
 {
     [ApiController]
     [ApiVersion("1.0")]
@@ -17,9 +17,9 @@ namespace Conquest.Controllers
     {
         private readonly IBusinessService _businessService;
         private readonly IBusinessAnalyticsService _analyticsService;
-        private readonly Conquest.Services.Places.IPlaceService _placeService;
+        private readonly Ping.Services.Places.IPlaceService _placeService;
 
-        public BusinessController(IBusinessService businessService, IBusinessAnalyticsService analyticsService, Conquest.Services.Places.IPlaceService placeService)
+        public BusinessController(IBusinessService businessService, IBusinessAnalyticsService analyticsService, Ping.Services.Places.IPlaceService placeService)
         {
             _businessService = businessService;
             _analyticsService = analyticsService;
@@ -77,3 +77,4 @@ namespace Conquest.Controllers
         }
     }
 }
+

@@ -1,17 +1,17 @@
-using Conquest.Data.Auth;
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Friends;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Friends;
-using Conquest.Utils;
+using Ping.Data.Auth;
+using Ping.Dtos.Common;
+using Ping.Dtos.Friends;
+using Ping.Models.AppUsers;
+using Ping.Models.Friends;
+using Ping.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-using Conquest.Services.Notifications;
-using Conquest.Models;
+using Ping.Services.Notifications;
+using Ping.Models;
 
-namespace Conquest.Services.Friends;
+namespace Ping.Services.Friends;
 
 public class FriendService(
     AuthDbContext authDb,

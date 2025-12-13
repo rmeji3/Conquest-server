@@ -2,19 +2,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using System.Security.Claims;
-using Conquest.Services.Places;
-using Conquest.Services.Reviews;
-using Conquest.Services.Events;
-using Conquest.Services.Activities;
-using Conquest.Services.Tags;
-using Conquest.Services.Moderation;
-using Conquest.Services;
-using Conquest.Services.Auth;
-using Conquest.Dtos.Business;
-using Conquest.Dtos.Tags;
-using Conquest.Models.AppUsers;
+using Ping.Services.Places;
+using Ping.Services.Reviews;
+using Ping.Services.Events;
+using Ping.Services.Activities;
+using Ping.Services.Tags;
+using Ping.Services.Moderation;
+using Ping.Services;
+using Ping.Services.Auth;
+using Ping.Dtos.Business;
+using Ping.Dtos.Tags;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Controllers
+namespace Ping.Controllers
 {
     [ApiController]
     [ApiVersion("1.0")]
@@ -302,3 +302,4 @@ namespace Conquest.Controllers
          public required string Ip { get; set; }
     }
 }
+

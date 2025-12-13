@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Conquest.Models.Users
+namespace Ping.Models.Users
 {
     public class IpBan
     {
@@ -15,3 +15,4 @@ namespace Conquest.Models.Users
         public DateTime? ExpiresAt { get; set; }
     }
 }
+

@@ -1,10 +1,10 @@
-using Conquest.Models;
-using Conquest.Services.Notifications;
+using Ping.Models;
+using Ping.Services.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace Conquest.Controllers;
+namespace Ping.Controllers;
 
 [ApiController]
 [Route("api/notifications")]
@@ -58,3 +58,4 @@ public class NotificationsController : ControllerBase
         return Ok();
     }
 }
+

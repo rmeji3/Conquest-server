@@ -2,30 +2,30 @@ using System.Text;
 using Prometheus;
 using Prometheus.DotNetRuntime;
 using Amazon.S3;
-using Conquest.Data.Auth;
-using Conquest.Data.App;
-using Conquest.Dtos.Auth;
-using Conquest.Features.Auth;
-using Conquest.Models.AppUsers;
-using Conquest.Services.Friends;
-using Conquest.Services.Places;
-using Conquest.Services.Events;
-using Conquest.Services.Reviews;
-using Conquest.Services.Business;
-using Conquest.Services.Tags;
-using Conquest.Services.Activities;
-using Conquest.Services.Profiles;
-using Conquest.Services.Auth;
-using Conquest.Services.Reports;
-using Conquest.Services.Moderation;
-using Conquest.Services.Blocks;
-using Conquest.Services.Redis;
-using Conquest.Services.Google;
-using Conquest.Services.Recommendations;
-using Conquest.Services.Storage;
-using Conquest.Services.Notifications;
-using Conquest.Services;
-using Conquest.Services.Analytics;
+using Ping.Data.Auth;
+using Ping.Data.App;
+using Ping.Dtos.Auth;
+using Ping.Features.Auth;
+using Ping.Models.AppUsers;
+using Ping.Services.Friends;
+using Ping.Services.Places;
+using Ping.Services.Events;
+using Ping.Services.Reviews;
+using Ping.Services.Business;
+using Ping.Services.Tags;
+using Ping.Services.Activities;
+using Ping.Services.Profiles;
+using Ping.Services.Auth;
+using Ping.Services.Reports;
+using Ping.Services.Moderation;
+using Ping.Services.Blocks;
+using Ping.Services.Redis;
+using Ping.Services.Google;
+using Ping.Services.Recommendations;
+using Ping.Services.Storage;
+using Ping.Services.Notifications;
+using Ping.Services;
+using Ping.Services.Analytics;
 using Microsoft.SemanticKernel;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -60,7 +60,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting Conquest API server");
+    Log.Information("Starting Ping API server");
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -201,7 +201,7 @@ if (builder.Environment.EnvironmentName != "Testing")
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
-        options.InstanceName = "Conquest:";
+        options.InstanceName = "Ping:";
     });
 
     builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -246,7 +246,7 @@ builder.Services.AddScoped<IBanningService, BanningService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddHostedService<AnalyticsBackgroundJob>();
-builder.Services.AddHostedService<Conquest.Services.Background.UnverifiedUserCleanupService>();
+builder.Services.AddHostedService<Ping.Services.Background.UnverifiedUserCleanupService>();
 
 // --- AWS S3 & Storage & Email ---
 var awsOptions = builder.Configuration.GetAWSOptions();
@@ -261,11 +261,11 @@ builder.Services.AddMemoryCache(); // Required for AppleAuthService JWKS caching
 builder.Services.AddAWSService<IAmazonS3>();
 builder.Services.AddAWSService<Amazon.SimpleEmail.IAmazonSimpleEmailService>(); // Add SES
 builder.Services.AddScoped<IStorageService, S3StorageService>();
-builder.Services.AddScoped<Conquest.Services.Email.IEmailService, Conquest.Services.Email.SesEmailService>(); // Add EmailService
-builder.Services.AddHttpClient<Conquest.Services.Moderation.IModerationService, Conquest.Services.Moderation.OpenAIModerationService>();
-builder.Services.AddScoped<Conquest.Services.AI.ISemanticService, Conquest.Services.AI.OpenAISemanticService>();
-builder.Services.AddScoped<Conquest.Services.Apple.AppleAuthService>();
-builder.Services.AddScoped<Conquest.Services.Google.GoogleAuthService>();
+builder.Services.AddScoped<Ping.Services.Email.IEmailService, Ping.Services.Email.SesEmailService>(); // Add EmailService
+builder.Services.AddHttpClient<Ping.Services.Moderation.IModerationService, Ping.Services.Moderation.OpenAIModerationService>();
+builder.Services.AddScoped<Ping.Services.AI.ISemanticService, Ping.Services.AI.OpenAISemanticService>();
+builder.Services.AddScoped<Ping.Services.Apple.AppleAuthService>();
+builder.Services.AddScoped<Ping.Services.Google.GoogleAuthService>();
 builder.Services.AddScoped<RecommendationService>();
 
 
@@ -332,12 +332,12 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddTransient<Conquest.Middleware.GlobalExceptionHandler>();
-builder.Services.AddScoped<Conquest.Middleware.RateLimitMiddleware>();
-builder.Services.AddScoped<Conquest.Middleware.BanningMiddleware>();
+builder.Services.AddTransient<Ping.Middleware.GlobalExceptionHandler>();
+builder.Services.AddScoped<Ping.Middleware.RateLimitMiddleware>();
+builder.Services.AddScoped<Ping.Middleware.BanningMiddleware>();
 builder.Services.AddSwaggerGen(o =>
 {
-    o.SwaggerDoc("v1", new OpenApiInfo { Title = "Conquest API", Version = "v1" });
+    o.SwaggerDoc("v1", new OpenApiInfo { Title = "Ping API", Version = "v1" });
     o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -383,7 +383,7 @@ using (var scope = app.Services.CreateScope())
 
 
 // --- Middleware ---
-app.UseMiddleware<Conquest.Middleware.GlobalExceptionHandler>();
+app.UseMiddleware<Ping.Middleware.GlobalExceptionHandler>();
 
 // Serilog request logging (logs all HTTP requests with timing)
 app.UseSerilogRequestLogging(options =>
@@ -402,7 +402,7 @@ app.UseSerilogRequestLogging(options =>
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Conquest API v1");
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ping API v1");
     c.RoutePrefix = string.Empty; // Swagger UI at "/"
 });
 
@@ -442,13 +442,13 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.UseMiddleware<Conquest.Middleware.ResponseMetricMiddleware>();
+app.UseMiddleware<Ping.Middleware.ResponseMetricMiddleware>();
 app.UseRouting();
 app.UseHttpMetrics();
 app.UseSession();
 app.UseAuthentication();
-app.UseMiddleware<Conquest.Middleware.BanningMiddleware>();
-app.UseMiddleware<Conquest.Middleware.RateLimitMiddleware>();
+app.UseMiddleware<Ping.Middleware.BanningMiddleware>();
+app.UseMiddleware<Ping.Middleware.RateLimitMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -473,3 +473,4 @@ finally
 }
 
 public partial class Program { }
+

@@ -1,6 +1,6 @@
-using Conquest.Dtos.Auth;
+using Ping.Dtos.Auth;
 
-namespace Conquest.Services.Auth;
+namespace Ping.Services.Auth;
 
 public interface IAuthService
 {
@@ -18,3 +18,4 @@ public interface IAuthService
     Task RemoveAdminAsync(string email);
     Task DeleteAccountAsync(string userId);
 }
+

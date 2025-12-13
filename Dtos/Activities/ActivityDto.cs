@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace Conquest.Dtos.Activities
+namespace Ping.Dtos.Activities
 {
     public record ActivitySummaryDto(
         int Id,
@@ -30,3 +30,4 @@ namespace Conquest.Dtos.Activities
         [Required, MaxLength(100)] string Name
     );
 }
+

@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Common;
+namespace Ping.Dtos.Common;
 
 public class PaginationParams
 {
@@ -13,3 +13,4 @@ public class PaginationParams
         set => _pageSize = value > MaxPageSize ? MaxPageSize : value;
     }
 }
+

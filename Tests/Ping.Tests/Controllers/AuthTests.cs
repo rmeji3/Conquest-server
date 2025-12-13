@@ -3,9 +3,9 @@ using Xunit.Abstractions;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http.Json;
-using Conquest.Dtos.Auth;
+using Ping.Dtos.Auth;
 
-namespace Conquest.Tests.Controllers;
+namespace Ping.Tests.Controllers;
 
 public class AuthTests : BaseIntegrationTest
 {
@@ -34,3 +34,4 @@ public class AuthTests : BaseIntegrationTest
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
+

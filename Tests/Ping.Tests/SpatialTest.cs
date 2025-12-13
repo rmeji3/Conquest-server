@@ -1,12 +1,12 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Places;
-using Conquest.Models.Places;
-using Conquest.Services.Places;
+using Ping.Data.App;
+using Ping.Dtos.Places;
+using Ping.Models.Places;
+using Ping.Services.Places;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 
-namespace Conquest.Tests;
+namespace Ping.Tests;
 
 public class SpatialTest : BaseIntegrationTest
 {
@@ -95,3 +95,4 @@ public class SpatialTest : BaseIntegrationTest
         Assert.DoesNotContain(result.Items, p => p.Name == "London Eye");
     }
 }
+

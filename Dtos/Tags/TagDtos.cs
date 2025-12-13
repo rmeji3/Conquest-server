@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Tags;
+namespace Ping.Dtos.Tags;
 
 public record TagDto(
     int Id,
@@ -7,3 +7,4 @@ public record TagDto(
     bool IsApproved = false,
     bool IsBanned = false
 );
+

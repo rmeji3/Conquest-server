@@ -1,6 +1,6 @@
-using Conquest.Models.Business;
+using Ping.Models.Business;
 
-namespace Conquest.Dtos.Business
+namespace Ping.Dtos.Business
 {
     public record CreateClaimDto(int PlaceId, string Proof);
 
@@ -19,3 +19,4 @@ namespace Conquest.Dtos.Business
     // For updates if needed, or simple approve/reject actions
     public record UpdateClaimStatusDto(ClaimStatus Status);
 }
+

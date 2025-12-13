@@ -1,6 +1,6 @@
 using System;
 
-namespace Conquest.Models.Reports
+namespace Ping.Models.Reports
 {
     public enum ReportTargetType
     {
@@ -30,3 +30,4 @@ namespace Conquest.Models.Reports
         public ReportStatus Status { get; set; } = ReportStatus.Pending;
     }
 }
+

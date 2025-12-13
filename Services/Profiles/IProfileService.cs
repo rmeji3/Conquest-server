@@ -1,10 +1,10 @@
-using Conquest.Dtos.Profiles;
+using Ping.Dtos.Profiles;
 using Microsoft.AspNetCore.Http; // Add this for IFormFile
-using Conquest.Dtos.Common;
-using Conquest.Dtos.Places;
-using Conquest.Dtos.Events;
+using Ping.Dtos.Common;
+using Ping.Dtos.Places;
+using Ping.Dtos.Events;
 
-namespace Conquest.Services.Profiles;
+namespace Ping.Services.Profiles;
 
 public interface IProfileService
 {
@@ -16,3 +16,4 @@ public interface IProfileService
     Task<PaginatedResult<PlaceDetailsDto>> GetUserPlacesAsync(string targetUserId, string currentUserId, PaginationParams pagination);
     Task<PaginatedResult<EventDto>> GetUserEventsAsync(string targetUserId, string currentUserId, PaginationParams pagination);
 }
+

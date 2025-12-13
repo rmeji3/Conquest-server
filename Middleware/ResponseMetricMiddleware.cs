@@ -2,7 +2,7 @@ using Prometheus;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace Conquest.Middleware;
+namespace Ping.Middleware;
 
 public class ResponseMetricMiddleware
 {
@@ -67,3 +67,4 @@ public class ResponseMetricMiddleware
         return endpoint?.DisplayName ?? "unknown";
     }
 }
+

@@ -1,11 +1,11 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
-using Conquest.Data.App;
-using Conquest.Models;
+using Ping.Data.App;
+using Ping.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Conquest.Tests.Controllers;
+namespace Ping.Tests.Controllers;
 
 public class NotificationsControllerTests : BaseIntegrationTest
 {
@@ -85,3 +85,4 @@ public class NotificationsControllerTests : BaseIntegrationTest
         }
     }
 }
+

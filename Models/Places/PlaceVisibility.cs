@@ -1,4 +1,4 @@
-namespace Conquest.Models.Places;
+namespace Ping.Models.Places;
 
 public enum PlaceVisibility
 {
@@ -6,3 +6,4 @@ public enum PlaceVisibility
     Friends = 1,
     Public = 2
 }
+

@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Common
+namespace Ping.Dtos.Common
 {
     public class PagedResult<T>
     {
@@ -19,3 +19,4 @@ namespace Conquest.Dtos.Common
         }
     }
 }
+

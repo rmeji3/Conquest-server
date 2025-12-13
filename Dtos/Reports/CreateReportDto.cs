@@ -1,7 +1,7 @@
 using System;
-using Conquest.Models.Reports;
+using Ping.Models.Reports;
 
-namespace Conquest.DTOs.Reports
+namespace Ping.DTOs.Reports
 {
     public class CreateReportDto
     {
@@ -11,3 +11,4 @@ namespace Conquest.DTOs.Reports
         public string? Description { get; set; }
     }
 }
+

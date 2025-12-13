@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Moderation;
+namespace Ping.Services.Moderation;
 
 public class OpenAIModerationService(HttpClient http, IConfiguration config, ILogger<OpenAIModerationService> logger) : IModerationService
 {
@@ -100,3 +100,4 @@ public class OpenAIModerationService(HttpClient http, IConfiguration config, ILo
         [JsonPropertyName("violence/graphic")] public bool ViolenceGraphic { get; set; }
     }
 }
+

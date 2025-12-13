@@ -2,7 +2,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.AI;
+namespace Ping.Services.AI;
 
 public class OpenAISemanticService(IChatCompletionService chat, ILogger<OpenAISemanticService> logger) : ISemanticService
 {
@@ -51,3 +51,4 @@ Candidate Name: {newName}");
         }
     }
 }
+

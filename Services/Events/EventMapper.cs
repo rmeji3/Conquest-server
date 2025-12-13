@@ -1,8 +1,8 @@
-using Conquest.Dtos.Events;
-using Conquest.Models.AppUsers;
-using Conquest.Models.Events;
+using Ping.Dtos.Events;
+using Ping.Models.AppUsers;
+using Ping.Models.Events;
 
-namespace Conquest.Services.Events;
+namespace Ping.Services.Events;
 
 public static class EventMapper
 {
@@ -64,3 +64,4 @@ public static class EventMapper
         );
     }
 }
+

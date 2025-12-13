@@ -1,6 +1,6 @@
-﻿using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Models.Friends
+namespace Ping.Models.Friends
 {
     public class Friendship
     {
@@ -16,3 +16,4 @@ namespace Conquest.Models.Friends
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

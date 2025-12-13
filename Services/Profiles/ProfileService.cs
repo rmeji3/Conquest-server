@@ -1,26 +1,26 @@
-using Conquest.Dtos.Profiles;
-using Conquest.Models.AppUsers;
+using Ping.Dtos.Profiles;
+using Ping.Models.AppUsers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-using Conquest.Data.App;
-using Conquest.Services.Friends;
-using Conquest.Models.Friends; // For FriendshipStatus enum
-using FriendshipStatus = Conquest.Dtos.Profiles.FriendshipStatus; // Alias for DTO enum
-using Conquest.Services.Storage;
-using Conquest.Dtos.Activities; // For ActivitySummaryDto
-using Conquest.Dtos.Reviews; // Fix ReviewDto
-using Conquest.Dtos.Places;  // Fix PlaceDetailsDto
-using Conquest.Dtos.Events; // Logic for events
-using Conquest.Services.Events; // For EventMapper
-using Conquest.Dtos.Common; // For PaginationParams, PaginatedResult
-using Conquest.Services.Profiles;
-using AppUserPrivacy = Conquest.Models.AppUsers.PrivacyConstraint; // Alias for Model enum
+using Ping.Data.App;
+using Ping.Services.Friends;
+using Ping.Models.Friends; // For FriendshipStatus enum
+using FriendshipStatus = Ping.Dtos.Profiles.FriendshipStatus; // Alias for DTO enum
+using Ping.Services.Storage;
+using Ping.Dtos.Activities; // For ActivitySummaryDto
+using Ping.Dtos.Reviews; // Fix ReviewDto
+using Ping.Dtos.Places;  // Fix PlaceDetailsDto
+using Ping.Dtos.Events; // Logic for events
+using Ping.Services.Events; // For EventMapper
+using Ping.Dtos.Common; // For PaginationParams, PaginatedResult
+using Ping.Services.Profiles;
+using AppUserPrivacy = Ping.Models.AppUsers.PrivacyConstraint; // Alias for Model enum
 
-using Conquest.Services.Blocks;
+using Ping.Services.Blocks;
 
-namespace Conquest.Services.Profiles;
+namespace Ping.Services.Profiles;
 
 public class ProfileService(
     UserManager<AppUser> userManager, 
@@ -723,3 +723,4 @@ public class ProfileService(
         return new PaginatedResult<EventDto>(eventDtos, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 }
+

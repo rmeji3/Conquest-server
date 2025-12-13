@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
-using Conquest.Dtos.Reviews;
-using Conquest.Dtos.Places;
-using Conquest.Dtos.Events;
-using Conquest.Models.AppUsers;
+using Ping.Dtos.Reviews;
+using Ping.Dtos.Places;
+using Ping.Dtos.Events;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Dtos.Profiles;
+namespace Ping.Dtos.Profiles;
 
 public record ProfileDto(
     [Required] string Id,

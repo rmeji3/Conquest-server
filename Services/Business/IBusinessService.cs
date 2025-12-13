@@ -1,7 +1,7 @@
-using Conquest.Dtos.Business;
-using Conquest.Models.Business;
+using Ping.Dtos.Business;
+using Ping.Models.Business;
 
-namespace Conquest.Services
+namespace Ping.Services
 {
     public interface IBusinessService
     {
@@ -12,3 +12,4 @@ namespace Conquest.Services
         // Analytics could go here later or in a separate AnalyticsService
     }
 }
+

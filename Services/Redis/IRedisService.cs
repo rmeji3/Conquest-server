@@ -1,4 +1,4 @@
-namespace Conquest.Services.Redis;
+namespace Ping.Services.Redis;
 
 /// <summary>
 /// Redis service for distributed caching and rate limiting operations.
@@ -37,3 +37,4 @@ public interface IRedisService
     /// </summary>
     Task<TimeSpan?> GetTtlAsync(string key);
 }
+

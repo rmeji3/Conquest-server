@@ -1,4 +1,4 @@
-namespace Conquest.Dtos.Moderation
+namespace Ping.Dtos.Moderation
 {
     public record BannedUserDto(
         string Id,
@@ -8,3 +8,4 @@ namespace Conquest.Dtos.Moderation
         int BanCount
     );
 }
+

@@ -1,12 +1,12 @@
-﻿using Conquest.Dtos.Auth;
-using Conquest.Services.Auth;
+using Ping.Dtos.Auth;
+using Ping.Services.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using System.Security.Claims;
 
-namespace Conquest.Controllers.Auth
+namespace Ping.Controllers.Auth
 {
 
     [ApiController]
@@ -214,3 +214,4 @@ namespace Conquest.Controllers.Auth
         }
     }
 }
+

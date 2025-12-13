@@ -1,9 +1,9 @@
-using Conquest.Dtos.Recommendations;
-using Conquest.Services.Recommendations;
+using Ping.Dtos.Recommendations;
+using Ping.Services.Recommendations;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Recommendations
+namespace Ping.Controllers.Recommendations
 {
 
     [ApiController]
@@ -29,3 +29,4 @@ namespace Conquest.Controllers.Recommendations
         }
     }
 }
+

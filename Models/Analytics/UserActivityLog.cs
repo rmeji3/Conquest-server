@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using Conquest.Models.AppUsers;
+using Ping.Models.AppUsers;
 
-namespace Conquest.Models.Analytics
+namespace Ping.Models.Analytics
 {
     public class UserActivityLog
     {
@@ -18,3 +18,4 @@ namespace Conquest.Models.Analytics
         public DateTimeOffset LastActivityUtc { get; set; }
     }
 }
+

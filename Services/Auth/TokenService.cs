@@ -1,6 +1,6 @@
-﻿namespace Conquest.Features.Auth
+namespace Ping.Features.Auth
 {
-    using Conquest.Dtos.Auth;
+    using Ping.Dtos.Auth;
     using Models.AppUsers;
     using Microsoft.AspNetCore.Identity;
     using Microsoft.Extensions.Options;
@@ -45,3 +45,4 @@
         }
     }
 }
+

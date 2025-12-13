@@ -1,12 +1,12 @@
-using Conquest.Data.App;
-using Conquest.Models.Places;
-using Conquest.Services.Google;
-using Conquest.Dtos.Recommendations;
+using Ping.Data.App;
+using Ping.Models.Places;
+using Ping.Services.Google;
+using Ping.Dtos.Recommendations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
-namespace Conquest.Services.Recommendations;
+namespace Ping.Services.Recommendations;
 
 public class RecommendationService(
     Kernel kernel,
@@ -156,3 +156,4 @@ public class RecommendationService(
         return matches;
     }
 }
+

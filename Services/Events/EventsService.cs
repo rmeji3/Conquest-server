@@ -1,6 +1,6 @@
-using Conquest.Models.Events;
+using Ping.Models.Events;
 
-namespace Conquest.Services.Events;
+namespace Ping.Services.Events;
 
 public class EventsService
 {

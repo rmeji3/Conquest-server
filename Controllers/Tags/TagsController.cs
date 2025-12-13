@@ -1,10 +1,10 @@
-using Conquest.Dtos.Tags;
-using Conquest.Services.Tags;
+using Ping.Dtos.Tags;
+using Ping.Services.Tags;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Tags;
+namespace Ping.Controllers.Tags;
 
 [ApiController]
     [ApiVersion("1.0")]
@@ -30,3 +30,4 @@ public class TagsController(ITagService tagService) : ControllerBase
 
 
 }
+

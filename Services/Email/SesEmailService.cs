@@ -1,13 +1,13 @@
 using Amazon.SimpleEmail;
 using Amazon.SimpleEmail.Model;
 
-namespace Conquest.Services.Email;
+namespace Ping.Services.Email;
 
 public class SesEmailService(IAmazonSimpleEmailService ses, IConfiguration config, ILogger<SesEmailService> logger) : IEmailService
 {
     public async Task SendEmailAsync(string to, string subject, string body)
     {
-        var fromAddress = config["Email:FromAddress"] ?? "noreply@conquest-app.com";
+        var fromAddress = config["Email:FromAddress"] ?? "noreply@Ping-app.com";
 
         var sendRequest = new SendEmailRequest
         {
@@ -48,3 +48,4 @@ public class SesEmailService(IAmazonSimpleEmailService ses, IConfiguration confi
         }
     }
 }
+

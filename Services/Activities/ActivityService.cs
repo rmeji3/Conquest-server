@@ -1,13 +1,13 @@
-using Conquest.Data.App;
-using Conquest.Dtos.Activities;
-using Conquest.Models.Activities;
-using Conquest.Models.Places;
-using Conquest.Services.AI;
-using Conquest.Services.Moderation;
+using Ping.Data.App;
+using Ping.Dtos.Activities;
+using Ping.Models.Activities;
+using Ping.Models.Places;
+using Ping.Services.AI;
+using Ping.Services.Moderation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Conquest.Services.Activities;
+namespace Ping.Services.Activities;
 
 public class ActivityService(
     AppDbContext db, 
@@ -121,3 +121,4 @@ public class ActivityService(
         }
     }
 }
+

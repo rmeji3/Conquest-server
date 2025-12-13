@@ -1,9 +1,9 @@
-using Conquest.Data.App;
-using Conquest.Models;
-using Conquest.Services.Redis;
+using Ping.Data.App;
+using Ping.Models;
+using Ping.Services.Redis;
 using Microsoft.EntityFrameworkCore;
 
-namespace Conquest.Services.Notifications;
+namespace Ping.Services.Notifications;
 
 public class NotificationService : INotificationService
 {
@@ -124,3 +124,4 @@ public class NotificationService : INotificationService
         return count > limit;
     }
 }
+

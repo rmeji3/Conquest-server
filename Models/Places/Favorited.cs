@@ -1,4 +1,4 @@
-namespace Conquest.Models.Places
+namespace Ping.Models.Places
 {
     public class Favorited
     {

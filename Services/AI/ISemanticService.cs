@@ -1,4 +1,4 @@
-namespace Conquest.Services.AI;
+namespace Ping.Services.AI;
 
 public interface ISemanticService
 {
@@ -8,3 +8,4 @@ public interface ISemanticService
     /// </summary>
     Task<string?> FindDuplicateAsync(string newName, IEnumerable<string> existingNames);
 }
+

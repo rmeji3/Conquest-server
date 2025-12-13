@@ -7,7 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using Serilog;
 
-namespace Conquest.Services.Apple;
+namespace Ping.Services.Apple;
 
 public class AppleAuthService
 {
@@ -133,3 +133,4 @@ public class JsonWebKey
     [JsonProperty("e")]
     public string E { get; set; } = "";
 }
+

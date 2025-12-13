@@ -1,15 +1,15 @@
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Conquest.Models.Reports;
-using Conquest.Dtos.Common;
-using Conquest.DTOs.Reports;
-using Conquest.Services.Reports;
+using Ping.Models.Reports;
+using Ping.Dtos.Common;
+using Ping.DTOs.Reports;
+using Ping.Services.Reports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace Conquest.Controllers.Reports
+namespace Ping.Controllers.Reports
 {
     [ApiController]
     [ApiVersion("1.0")]
@@ -43,3 +43,4 @@ namespace Conquest.Controllers.Reports
         }
     }
 }
+

@@ -1,4 +1,4 @@
-﻿namespace Conquest.Dtos.Friends
+namespace Ping.Dtos.Friends
 {
      public class FriendSummaryDto
     {
@@ -9,3 +9,4 @@
         public string ? ProfileImageUrl { get; set; }
     }
 }
+

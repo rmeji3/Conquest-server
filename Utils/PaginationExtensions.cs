@@ -1,7 +1,7 @@
-using Conquest.Dtos.Common;
+using Ping.Dtos.Common;
 using Microsoft.EntityFrameworkCore;
 
-namespace Conquest.Utils;
+namespace Ping.Utils;
 
 public static class PaginationExtensions
 {
@@ -28,3 +28,4 @@ public static class PaginationExtensions
         return new PaginatedResult<T>(items, count, p.PageNumber, p.PageSize);
     }
 }
+

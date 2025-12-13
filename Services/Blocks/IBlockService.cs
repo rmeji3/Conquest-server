@@ -1,7 +1,7 @@
-using Conquest.Models.AppUsers;
-using Conquest.Models.Users;
+using Ping.Models.AppUsers;
+using Ping.Models.Users;
 
-namespace Conquest.Services.Blocks
+namespace Ping.Services.Blocks
 {
     public interface IBlockService
     {
@@ -12,3 +12,4 @@ namespace Conquest.Services.Blocks
         Task<HashSet<string>> GetBlacklistedUserIdsAsync(string userId);
     }
 }
+
