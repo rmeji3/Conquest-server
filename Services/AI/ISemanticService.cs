@@ -7,5 +7,12 @@ public interface ISemanticService
     /// Returns the matching existing name, or null if unique.
     /// </summary>
     Task<string?> FindDuplicateAsync(string newName, IEnumerable<string> existingNames);
+    
+    /// <summary>
+    /// Checks if the userProvidedName is a valid variation of the officialName.
+    /// Returns true if it's a match (abbreviation, typo, nickname).
+    /// Returns false if it's unrelated.
+    /// </summary>
+    Task<bool> VerifyPlaceNameMatchAsync(string officialName, string userProvidedName);
 }
 

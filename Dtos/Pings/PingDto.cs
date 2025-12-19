@@ -4,7 +4,7 @@ using Ping.Models.Business;
 
 namespace Ping.Dtos.Pings
 {
-    public record UpsertPingDto(string Name, string? Address, double Latitude, double Longitude, PingVisibility Visibility, PingType Type, int? PingGenreId);
+    public record UpsertPingDto(string Name, string? Address, double Latitude, double Longitude, PingVisibility Visibility, PingType Type, int? PingGenreId, string? GooglePlaceId);
     public record PingDetailsDto(
         int Id, 
         string Name, 
@@ -17,11 +17,12 @@ namespace Ping.Dtos.Pings
         bool IsFavorited,
         int Favorites,
         PingActivitySummaryDto[] Activities,
-        string[] PingGenres, // Kept as array if needed or just single
+        string? PingGenre, // Changed from array to single per user request
         ClaimStatus? ClaimStatus = null,
         bool IsClaimed = false,
         int? PingGenreId = null,
-        string? PingGenreName = null
+        string? PingGenreName = null,
+        string? GooglePlaceId = null
         );
 
 }

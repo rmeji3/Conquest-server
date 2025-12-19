@@ -10,6 +10,8 @@ namespace Ping.Models.Pings
         public required string Name { get; set; } = null!;
         [MaxLength(300)]
         public string? Address { get; set; }
+        [MaxLength(100)]
+        public string? GooglePlaceId { get; set; }
         public NetTopologySuite.Geometries.Point Location { get; set; } = null!;
         
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]

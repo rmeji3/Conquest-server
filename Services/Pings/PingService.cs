@@ -22,6 +22,7 @@ public class PingService(
     IPingNameService pingNameService,
     IFriendService friendService,
     Services.Moderation.IModerationService moderationService,
+    Services.AI.ISemanticService semanticService,
     ILogger<PingService> logger) : IPingService
 {
     public async Task<PingDetailsDto> CreatePingAsync(UpsertPingDto dto, string userId)
@@ -63,36 +64,72 @@ public class PingService(
         {
             if (dto.Type == PingType.Verified)
             {
-                if (string.IsNullOrWhiteSpace(dto.Address))
+                if (!string.IsNullOrWhiteSpace(dto.GooglePlaceId))
                 {
-                    logger.LogError("Verified ping creation failed: Address is required for verified pings.");
-                    throw new InvalidOperationException("Verified pings require an address.");
-                }
-
-                var existingByAddress = await db.Pings
-                    .Where(p => p.Visibility == PingVisibility.Public &&
-                                p.Type == PingType.Verified &&
-                                p.Address == dto.Address.Trim())
-                    .FirstOrDefaultAsync();
-
-                if (existingByAddress != null)
-                {
-                    logger.LogInformation("Verified ping already exists with address '{Address}'. Returning existing ping {PingId}.", dto.Address, existingByAddress.Id);
-                    return await ToPingDetailsDto(existingByAddress, userId);
-                }
-
-                // Fetch Google name for verified pings
-                logger.LogInformation("Verified ping detected. Calling Google Places API for coordinates {Lat}, {Lng}", dto.Latitude, dto.Longitude);
-                var googleName = await pingNameService.GetPingNameAsync(dto.Latitude, dto.Longitude);
-                
-                if (!string.IsNullOrWhiteSpace(googleName))
-                {
-                    logger.LogInformation("Using Google Places name: '{GoogleName}' for verified ping.", googleName);
-                    finalName = googleName;
+                    // New "Verified via ID" path
+                    logger.LogInformation("Verified ping with GooglePlaceId {Id}. Verifying name match...", dto.GooglePlaceId);
+                    
+                    var googlePlace = await pingNameService.GetGooglePlaceByIdAsync(dto.GooglePlaceId);
+                    if (googlePlace != null)
+                    {
+                        var isMatch = await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, finalName);
+                        if (isMatch)
+                        {
+                            logger.LogInformation("AI Verified: '{User}' matches '{Official}'. Keeping Verified status.", finalName, googlePlace.Name);
+                            // Keep PingType.Verified
+                            // We use the USER provided name (finalName) as requested
+                            // Ensure lat/lng are accurate if available from Google
+                            if (googlePlace.Lat.HasValue && googlePlace.Lng.HasValue)
+                            {
+                                dto = dto with { Latitude = googlePlace.Lat.Value, Longitude = googlePlace.Lng.Value };
+                            }
+                        }
+                        else
+                        {
+                            logger.LogWarning("AI Verification Failed: '{User}' does NOT match '{Official}'. Downgrading to Custom.", finalName, googlePlace.Name);
+                            dto = dto with { Type = PingType.Custom };
+                        }
+                    }
+                    else
+                    {
+                        logger.LogError("GooglePlaceId {Id} provided but not found. Downgrading to Custom.", dto.GooglePlaceId);
+                        dto = dto with { Type = PingType.Custom };
+                    }
                 }
                 else
                 {
-                    logger.LogInformation("Google Places returned no name. Using user-provided name: '{UserName}'", finalName);
+                    // Legacy "Verified via Address/Location" path
+                    if (string.IsNullOrWhiteSpace(dto.Address))
+                    {
+                        logger.LogError("Verified ping creation failed: Address is required for verified pings.");
+                        throw new InvalidOperationException("Verified pings require an address.");
+                    }
+
+                    var existingByAddress = await db.Pings
+                        .Where(p => p.Visibility == PingVisibility.Public &&
+                                    p.Type == PingType.Verified &&
+                                    p.Address == dto.Address.Trim())
+                        .FirstOrDefaultAsync();
+
+                    if (existingByAddress != null)
+                    {
+                        logger.LogInformation("Verified ping already exists with address '{Address}'. Returning existing ping {PingId}.", dto.Address, existingByAddress.Id);
+                        return await ToPingDetailsDto(existingByAddress, userId);
+                    }
+
+                    // Fetch Google name for verified pings (Overwrite behavior)
+                    logger.LogInformation("Verified ping detected (Legacy). Calling Google Places API for coordinates {Lat}, {Lng}", dto.Latitude, dto.Longitude);
+                    var googleName = await pingNameService.GetPingNameAsync(dto.Latitude, dto.Longitude);
+                    
+                    if (!string.IsNullOrWhiteSpace(googleName))
+                    {
+                        logger.LogInformation("Using Google Places name: '{GoogleName}' for verified ping.", googleName);
+                        finalName = googleName;
+                    }
+                    else
+                    {
+                        logger.LogInformation("Google Places returned no name. Using user-provided name: '{UserName}'", finalName);
+                    }
                 }
             }
             else // PingType.Custom
@@ -128,6 +165,7 @@ public class PingService(
             Visibility = dto.Visibility,
             Type = dto.Type,
             PingGenreId = dto.PingGenreId,
+            GooglePlaceId = dto.GooglePlaceId,
             CreatedUtc = DateTime.UtcNow
         };
 
@@ -177,6 +215,27 @@ public class PingService(
         ping.Visibility = dto.Visibility;
         ping.Type = dto.Type;
         ping.PingGenreId = dto.PingGenreId;
+        
+        // Update GooglePlaceId if provided (allows linking later)
+        if (!string.IsNullOrWhiteSpace(dto.GooglePlaceId))
+        {
+             // If we are updating to Verified, run verification again?
+             // For now, trust the Create logic or if they pass it in update.
+             // If type is verified, ensure match.
+             if (dto.Type == PingType.Verified)
+             {
+                 var googlePlace = await pingNameService.GetGooglePlaceByIdAsync(dto.GooglePlaceId);
+                 if (googlePlace != null)
+                 {
+                     if (!await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, finalName))
+                     {
+                          logger.LogWarning("Update Ping: Name '{User}' does NOT match '{Official}'. Force downgrading to Custom.", finalName, googlePlace.Name);
+                          ping.Type = PingType.Custom;
+                     }
+                 }
+             }
+             ping.GooglePlaceId = dto.GooglePlaceId;
+        }
 
         await db.SaveChangesAsync();
 
@@ -488,9 +547,6 @@ public class PingService(
             ))
             .ToArray();
 
-        // For PingGenres, assume single genre
-        string[] pingGenres = p.PingGenre != null ? [p.PingGenre.Name] : [];
-
         return new PingDetailsDto(
             p.Id,
             p.Name,
@@ -503,11 +559,12 @@ public class PingService(
             isFavorited,
             p.Favorites,
             activities,
-            pingGenres,
+            p.PingGenre?.Name,
             (ClaimStatus?)claim?.Status,
             p.IsClaimed,
             p.PingGenreId,
-            p.PingGenre?.Name
+            p.PingGenre?.Name,
+            p.GooglePlaceId
         );
     }
 }

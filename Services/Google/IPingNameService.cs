@@ -5,6 +5,7 @@ public record GooglePingInfo(string Name, string? Address, double? Lat, double? 
 public interface IPingNameService
 {
     Task<string?> GetPingNameAsync(double lat, double lng);
+    Task<GooglePingInfo?> GetGooglePlaceByIdAsync(string placeId);
     Task<List<GooglePingInfo>> SearchPingsAsync(string query, double lat, double lng, double radiusKm);
 }
 

@@ -31,7 +31,8 @@ public class SpatialTest : BaseIntegrationTest
             -73.968285,
             PingVisibility.Public,
             PingType.Custom,
-            null // PingGenreId
+            null, // PingGenreId
+            null // GooglePlaceId
         ), userId);
 
         // Assert

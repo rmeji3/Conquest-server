@@ -70,7 +70,8 @@ public class ActivityServiceTests : BaseIntegrationTest
             -74.0060, 
             PingVisibility.Public, 
             PingType.Verified,
-            null // PingGenreId
+            null, // PingGenreId
+            null // GooglePlaceId
             );
         
         // Act

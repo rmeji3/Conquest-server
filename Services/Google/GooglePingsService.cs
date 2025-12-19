@@ -177,5 +177,63 @@ public class GooglePingsService(HttpClient httpClient, IConfiguration config, IL
             return [];
         }
     }
+
+    public async Task<GooglePingInfo?> GetGooglePlaceByIdAsync(string placeId)
+    {
+        var apiKey = config["Google:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            logger.LogWarning("Google API Key is missing.");
+            return null;
+        }
+
+        try
+        {
+            // https://places.googleapis.com/v1/places/{placeId}
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://places.googleapis.com/v1/places/{placeId}");
+            request.Headers.Add("X-Goog-Api-Key", apiKey);
+            request.Headers.Add("X-Goog-FieldMask", "displayName,formattedAddress,location");
+
+            var response = await httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                logger.LogError("Google Places ID Lookup error: {StatusCode}, Body: {ErrorBody}", response.StatusCode, errorBody);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            
+            string name = "";
+            if (doc.RootElement.TryGetProperty("displayName", out var displayNameObj) && 
+                displayNameObj.TryGetProperty("text", out var textProp))
+            {
+                name = textProp.GetString() ?? "";
+            }
+
+            string? address = null;
+            if (doc.RootElement.TryGetProperty("formattedAddress", out var addrProp))
+            {
+                address = addrProp.GetString();
+            }
+
+            double? pLat = null;
+            double? pLng = null;
+            if (doc.RootElement.TryGetProperty("location", out var locObj))
+            {
+                if (locObj.TryGetProperty("latitude", out var latProp)) pLat = latProp.GetDouble();
+                if (locObj.TryGetProperty("longitude", out var lngProp)) pLng = lngProp.GetDouble();
+            }
+
+            return new GooglePingInfo(name, address, pLat, pLng);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error calling Google Places ID Lookup");
+            return null;
+        }
+    }
 }
 

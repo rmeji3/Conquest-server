@@ -120,7 +120,12 @@ public class ProfileService(
                 false, // IsFavorited - simpler to skip for "My Profile" summary or fetch if needed. Keeping it false for now as per other endpoints to avoid N+1
                 0, // Favorites count - skipping for summary
                 Array.Empty<PingActivitySummaryDto>(),
-                Array.Empty<string>()
+                p.PingGenre?.Name,
+                null, // ClaimStatus not loaded here
+                p.IsClaimed,
+                p.PingGenreId,
+                p.PingGenre?.Name,
+                p.GooglePlaceId
             ));
         }
 
@@ -408,7 +413,12 @@ public class ProfileService(
                             false, // IsFavorited
                             0, // Favorites count
                             Array.Empty<PingActivitySummaryDto>(),
-                            Array.Empty<string>()
+                            p.PingGenre?.Name,
+                            null,
+                            p.IsClaimed,
+                            p.PingGenreId,
+                            p.PingGenre?.Name,
+                            p.GooglePlaceId
                         ));
                     }
                 }
@@ -623,7 +633,12 @@ public class ProfileService(
                 false, // IsFavorited - fetching this requires extra query, skipping for list view or need batch check
                 0, // Favorites count
                 Array.Empty<PingActivitySummaryDto>(),
-                Array.Empty<string>()
+                p.PingGenre?.Name,
+                null,
+                p.IsClaimed,
+                p.PingGenreId,
+                p.PingGenre?.Name,
+                p.GooglePlaceId
             ));
         }
 

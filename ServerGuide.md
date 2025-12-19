@@ -215,7 +215,7 @@ Property Configuration:
 | AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason, LastLoginUtc, CreatedUtc |(Friends)                              | Stored in Auth DB; Unverified users deleted after 12h; PingsPrivacy/ReviewsPrivacy settings |
 | IpBan         | IpAddress          | Reason, CreatedAt, ExpiresAt                                                                                             | (None)                                 | Stores banned IPs                                                                                                     |
 | Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
-| Ping          | Id                 | Name, Address, **Location (Point)**, Latitude*, Longitude*, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc | PingActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic; *Lat/Lon are computed props mapped to Location (SRID 4326) |
+| Ping          | Id                 | Name, Address, **Location (Point)**, Latitude*, Longitude*, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc, GooglePlaceId? | PingActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic; *Lat/Lon are computed props mapped to Location (SRID 4326) |
 | Favorited     | Id                 | UserId, PingId                                                                                                          | Ping                                  | Unique per user per ping; cascade deletes with Ping                                                                 |
 | PingGenre     | Id                 | Name                                                                                                                     | PingActivities                         | Seeded                                                                                                                |
 | PingActivity  | Id                 | PingId, PingGenreId?, Name, CreatedUtc                                                                               | Ping, PingGenre, Reviews, CheckIns     | Unique per ping by Name                                                                                              |
@@ -262,8 +262,8 @@ Property Configuration:
 ### Pings
 - `PingVisibility` enum: `Private = 0`, `Friends = 1`, `Public = 2`
 - `PingType` enum: `Custom = 0`, `Verified = 1`
-- `UpsertPingDto(Name, Address?, Latitude, Longitude, Visibility, Type)`
-- `PingDetailsDto(Id, Name, Address, Latitude, Longitude, Visibility, Type, IsOwner, IsFavorited, Favorites, Activities[PingActivitySummaryDto], PingGenres[string], ClaimStatus?, IsClaimed)`
+- `UpsertPingDto(Name, Address?, Latitude, Longitude, Visibility, Type, GooglePlaceId?)`
+- `PingDetailsDto(Id, Name, Address, Latitude, Longitude, Visibility, Type, IsOwner, IsFavorited, Favorites, Activities[PingActivitySummaryDto], PingGenre?, ClaimStatus?, IsClaimed, GooglePlaceId?)`
 
 ### Profiles
 - `ProfileDto(Id, DisplayName, FirstName, LastName, ProfilePictureUrl?)`

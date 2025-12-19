@@ -50,5 +50,43 @@ Candidate Name: {newName}");
             return null; // Fail safe (allow creation)
         }
     }
+
+    public async Task<bool> VerifyPlaceNameMatchAsync(string officialName, string userProvidedName)
+    {
+        var history = new ChatHistory();
+        history.AddSystemMessage(@"You are a semantic validation assistant for a map application.
+Your task is to determine if 'User Provided Name' is a valid name for the place officially known as 'Official Name'.
+
+Return 'TRUE' if:
+- It is a common nickname (e.g. 'The Met' for 'Metropolitan Museum of Art').
+- It is an abbreviation (e.g. 'MoMA', 'JFK Airport').
+- It is a slight typo or spelling variation.
+- It is a more specific descriptor that is accurate (e.g. 'Starbucks on 5th' for 'Starbucks').
+
+Return 'FALSE' if:
+- It is completely unrelated (e.g. 'My House' for 'McDonalds').
+- It is misleading or offensive.
+- It is a different place entirely.
+
+Respond ONLY with 'TRUE' or 'FALSE'.");
+
+        history.AddUserMessage($@"Official Name: {officialName}
+User Provided Name: {userProvidedName}");
+
+        try
+        {
+            var result = await chat.GetChatMessageContentAsync(history);
+            var response = result.Content?.Trim();
+            
+            return response != null && response.Equals("TRUE", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Semantic verification failed");
+            // Fail safe: If AI is down, we can default to string equality or return false.
+            // Returning false leans on the side of caution (demoting to Custom ping).
+            return officialName.Equals(userProvidedName, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }
 
