@@ -45,6 +45,18 @@ public class EventService(
             throw new ArgumentException($"Ping with ID {dto.PingId} not found.");
         }
 
+        // --- Privacy Constraints ---
+        if (ping.Visibility == Models.Pings.PingVisibility.Private)
+        {
+            throw new ArgumentException("Places marked as 'Private' cannot host events.");
+        }
+
+        if (ping.Visibility == Models.Pings.PingVisibility.Friends && dto.IsPublic)
+        {
+            throw new ArgumentException("Events hosted at 'Friends Only' places must be private (invite-only).");
+        }
+        // --- End Privacy Constraints ---
+
         var ev = new Event
         {
             Title = dto.Title,
@@ -175,12 +187,19 @@ public class EventService(
         if (dto.ThumbnailUrl != null) ev.ThumbnailUrl = dto.ThumbnailUrl;
         if (dto.Price.HasValue) ev.Price = dto.Price.Value;
 
-        if (dto.PingId.HasValue)
-        {
-            var ping = await appDb.Pings.FindAsync(dto.PingId.Value);
-            if (ping == null) throw new ArgumentException($"Ping with ID {dto.PingId} not found");
-            
             ev.PingId = dto.PingId.Value;
+            ev.Ping = ping; // Update the navigation property for the check below
+        }
+
+        // Re-validate privacy constraints if Ping or Visibility changed
+        if (ev.Ping.Visibility == Models.Pings.PingVisibility.Private)
+        {
+            throw new ArgumentException("Places marked as 'Private' cannot host events.");
+        }
+
+        if (ev.Ping.Visibility == Models.Pings.PingVisibility.Friends && ev.IsPublic)
+        {
+            throw new ArgumentException("Events hosted at 'Friends Only' places must be private (invite-only).");
         }
 
         await appDb.SaveChangesAsync();

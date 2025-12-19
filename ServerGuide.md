@@ -560,8 +560,8 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | GET    | /api/profiles/me/places (Q: sortBy, sortOrder)   | A    | —    | `PaginatedResult<PlaceReviewSummaryDto>` | All places reviewed by current user (No filtering)      |
 | GET    | /api/profiles/{id}/places/{pId}/reviews | A | — | `PaginatedResult<ReviewDto>` | Drill down into reviews for a place (Strict Privacy) |
 | GET    | /api/profiles/me/places/{pId}/reviews | A | — | `PaginatedResult<ReviewDto>` | Drill down into own reviews (No filtering) |
-| GET    | /api/profiles/{id}/likes       | A    | —    | `PaginatedResult`    | Reviews liked by user (respects privacy)            |
-| GET    | /api/profiles/me/likes         | A    | —    | `PaginatedResult`    | Reviews liked by me                                 |
+| GET    | /api/profiles/{id}/likes       | A    | —    | `PaginatedResult`    | Reviews liked by user (respects privacy, Q: sortBy, sortOrder) |
+| GET    | /api/profiles/me/likes         | A    | —    | `PaginatedResult`    | Reviews liked by me (Q: sortBy, sortOrder)          |
 | PATCH  | /api/profiles/me/privacy       | A    | `PrivacySettingsDto` | 200 OK | Update privacy (`ReviewsPrivacy`, `PingsPrivacy`, `LikesPrivacy`) |
 
 ### RepingsController (`/api/repings`)
@@ -690,6 +690,10 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
   - Providing manual location fields (`Location`, `Latitude`, `Longitude`) WITHOUT a `PingId` **unlinks** the event (`PingId` becomes null).
 - **Moderation**: `Title`, `Description`, and `Location` (Ping Name) are moderated.
   - Violations result in `400 Bad Request` with `ArgumentException`.
+- **Privacy Constraints (Place-Based)**:
+  - **Private Places**: Cannot host any events. 
+  - **Friends-Only Places**: Can ONLY host Private events (invite-only).
+  - **Public Places**: Can host both Public and Private events.
 
 ### Activities
 - Name must be unique per ping (case-insensitive)

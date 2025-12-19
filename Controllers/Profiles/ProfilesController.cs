@@ -277,7 +277,7 @@ namespace Ping.Controllers.Profiles
 
         // GET /api/profiles/{id}/likes?pageNumber=1&pageSize=10
         [HttpGet("{id}/likes")]
-        public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetUserLikes(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetUserLikes(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? sortBy = null, [FromQuery] string? sortOrder = null)
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (currentUserId is null) return Unauthorized();
@@ -285,7 +285,7 @@ namespace Ping.Controllers.Profiles
             try
             {
                 var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
-                var likes = await reviewService.GetUserLikesAsync(id, currentUserId, pagination);
+                var likes = await reviewService.GetUserLikesAsync(id, currentUserId, pagination, sortBy, sortOrder);
                 return Ok(likes);
             }
             catch (KeyNotFoundException)
@@ -296,13 +296,13 @@ namespace Ping.Controllers.Profiles
 
         // GET /api/profiles/me/likes?pageNumber=1&pageSize=10
         [HttpGet("me/likes")]
-        public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetMyLikes([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<PaginatedResult<ExploreReviewDto>>> GetMyLikes([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? sortBy = null, [FromQuery] string? sortOrder = null)
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (currentUserId is null) return Unauthorized();
 
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
-            var likes = await reviewService.GetLikedReviewsAsync(currentUserId, pagination);
+            var likes = await reviewService.GetLikedReviewsAsync(currentUserId, pagination, sortBy, sortOrder);
             return Ok(likes);
         }
 

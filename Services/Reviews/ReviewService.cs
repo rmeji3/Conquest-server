@@ -434,7 +434,7 @@ public class ReviewService(
         logger.LogInformation("Review {ReviewId} unliked by {UserId}", reviewId, userId);
     }
 
-    public async Task<PaginatedResult<ExploreReviewDto>> GetUserLikesAsync(string targetUserId, string viewerUserId, PaginationParams pagination)
+    public async Task<PaginatedResult<ExploreReviewDto>> GetUserLikesAsync(string targetUserId, string viewerUserId, PaginationParams pagination, string? sortBy = null, string? sortOrder = null)
     {
         var targetUser = await userManager.FindByIdAsync(targetUserId);
         if (targetUser == null) throw new KeyNotFoundException("User not found.");
@@ -509,7 +509,12 @@ public class ReviewService(
             );
         }
 
-        query = query.OrderByDescending(rl => rl.CreatedAt);
+        // Default Sort: CreatedAt Descending (Recency)
+        bool isAscending = sortOrder?.Equals("Asc", StringComparison.OrdinalIgnoreCase) ?? false;
+        
+        query = isAscending 
+            ? query.OrderBy(rl => rl.CreatedAt) 
+            : query.OrderByDescending(rl => rl.CreatedAt);
 
         var count = await query.CountAsync();
         var likedReviews = await query
@@ -566,9 +571,9 @@ public class ReviewService(
         return result.ToPaginatedResult(pagination);
     }
 
-    public async Task<PaginatedResult<ExploreReviewDto>> GetLikedReviewsAsync(string userId, PaginationParams pagination)
+    public async Task<PaginatedResult<ExploreReviewDto>> GetLikedReviewsAsync(string userId, PaginationParams pagination, string? sortBy = null, string? sortOrder = null)
     {
-        var likedReviews = await appDb.ReviewLikes
+        var query = appDb.ReviewLikes
             .Where(rl => rl.UserId == userId)
             .Include(rl => rl.Review)
                 .ThenInclude(r => r.PingActivity)
@@ -577,8 +582,20 @@ public class ReviewService(
             .Include(rl => rl.Review)
                 .ThenInclude(r => r.ReviewTags)
                     .ThenInclude(rt => rt.Tag)
-            .AsNoTracking()
-            .OrderByDescending(rl => rl.CreatedAt)
+            .AsNoTracking();
+
+        // Default Sort: CreatedAt Descending
+        bool isAscending = sortOrder?.Equals("Asc", StringComparison.OrdinalIgnoreCase) ?? false;
+
+        query = isAscending
+            ? query.OrderBy(rl => rl.CreatedAt)
+            : query.OrderByDescending(rl => rl.CreatedAt);
+
+        var count = await query.CountAsync();
+
+        var likedReviews = await query
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync();
 
         var userIds = likedReviews.Select(r => r.Review.UserId).Distinct().ToList();
