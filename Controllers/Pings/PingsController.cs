@@ -93,11 +93,13 @@ namespace Ping.Controllers.Pings
         // GET /api/pings/nearby
         [HttpGet("nearby")]
         public async Task<ActionResult<PaginatedResult<PingDetailsDto>>> Nearby(
-            [FromQuery] double lat,
-            [FromQuery] double lng,
-            [FromQuery] double radiusKm = 5,
+            [FromQuery] double? lat,
+            [FromQuery] double? lng,
+            [FromQuery] double? radiusKm = 5,
+            [FromQuery] string? query = null,
             [FromQuery] string? activityName = null,
             [FromQuery] string? pingGenreName = null,
+            [FromQuery] string[]? tags = null,
             [FromQuery] PingVisibility? visibility = null,
             [FromQuery] PingType? type = null,
             [FromQuery] int pageNumber = 1,
@@ -105,7 +107,7 @@ namespace Ping.Controllers.Pings
         {
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await pingService.SearchNearbyAsync(lat, lng, radiusKm, activityName, pingGenreName, visibility, type, userId, pagination);
+            var result = await pingService.SearchNearbyAsync(lat, lng, radiusKm, query, activityName, pingGenreName, tags, visibility, type, userId, pagination);
             return Ok(result);
         }
 

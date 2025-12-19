@@ -307,29 +307,50 @@ public class PingService(
 
 
     public async Task<PaginatedResult<PingDetailsDto>> SearchNearbyAsync(
-        double lat,
-        double lng,
-        double radiusKm,
+        double? lat,
+        double? lng,
+        double? radiusKm,
+        string? query,
         string? activityName,
-        string? pingGenreName, // was activityKind, now filtering by PingGenre? Or Activity Name still?
+        string? pingGenreName,
+        string[]? tags,
         PingVisibility? visibility,
         PingType? type,
         string? userId,
         PaginationParams pagination
     )
     {
-        var searchPoint = new Point(lng, lat) { SRID = 4326 };
-        double radiusDegrees = radiusKm / 111.32;
-
-        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, radius={Radius}km ({Deg} deg), vis={Vis}, type={Type}", lat, lng, radiusKm, radiusDegrees, visibility, type);
+        logger.LogDebug("Nearby search: lat={Lat}, lng={Lng}, query={Query}, tags={Tags}", lat, lng, query, tags != null ? string.Join(",", tags) : "none");
 
         var q = db.Pings
-        .Where(p => !p.IsDeleted)
-        .Include(p => p.PingActivities)
-        .Include(p => p.PingGenre)
-        .AsNoTracking();
+            .Where(p => !p.IsDeleted)
+            .Include(p => p.PingActivities)
+            .Include(p => p.PingGenre)
+            .AsNoTracking();
 
-        q = q.Where(p => p.Location.IsWithinDistance(searchPoint, radiusDegrees));
+        // Keyword Search
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var search = query.Trim().ToLowerInvariant();
+            q = q.Where(p => p.Name.ToLower().Contains(search) || (p.Address != null && p.Address.ToLower().Contains(search)));
+        }
+
+        // Tags Search
+        if (tags != null && tags.Any())
+        {
+            var normalizedTags = tags.Select(t => t.Trim().ToLowerInvariant()).ToList();
+            q = q.Where(p => p.PingActivities
+                .Any(a => a.Reviews
+                    .Any(r => r.ReviewTags.Any(rt => normalizedTags.Contains(rt.Tag.Name.ToLower())))));
+        }
+
+        // Geospatial
+        if (lat.HasValue && lng.HasValue && radiusKm.HasValue)
+        {
+            var searchPoint = new Point(lng.Value, lat.Value) { SRID = 4326 };
+            double radiusDegrees = radiusKm.Value / 111.32;
+            q = q.Where(p => p.Location.IsWithinDistance(searchPoint, radiusDegrees));
+        }
 
         if (visibility.HasValue)
         {
@@ -362,20 +383,24 @@ public class PingService(
             friendIds = ids.ToHashSet();
         }
 
-        var withDistance = new List<(PingDetailsDto Dto, double Distance)>();
+        var mapped = new List<(PingDetailsDto Dto, double? Distance)>();
 
         foreach (var p in candidates)
         {
             if (!IsVisibleToUser(p, userId, friendIds)) continue;
             
-            var dist = DistanceKm(lat, lng, p.Latitude, p.Longitude);
+            double? dist = null;
+            if (lat.HasValue && lng.HasValue) 
+            {
+                dist = DistanceKm(lat.Value, lng.Value, p.Latitude, p.Longitude);
+            }
             
             var dto = await ToPingDetailsDto(p, userId);
-            withDistance.Add((dto, dist));
+            mapped.Add((dto, dist));
         }
 
-        var sorted = withDistance
-            .OrderBy(x => x.Distance)
+        var sorted = mapped
+            .OrderBy(x => x.Distance ?? double.MaxValue)
             .Select(x => x.Dto);
 
         return sorted.ToPaginatedResult(pagination);

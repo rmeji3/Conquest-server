@@ -88,7 +88,13 @@ public class SpatialTest : BaseIntegrationTest
             40.7580, 
             -73.9855, 
             1.0, 
-            null, null, null, null, null, 
+            null, // query
+            null, // activityName
+            null, // pingGenreName
+            null, // tags
+            null, // visibility
+            null, // type
+            userId,
             new Dtos.Common.PaginationParams { PageNumber = 1, PageSize = 10 }
         );
 

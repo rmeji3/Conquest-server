@@ -187,6 +187,11 @@ public class EventService(
         if (dto.ThumbnailUrl != null) ev.ThumbnailUrl = dto.ThumbnailUrl;
         if (dto.Price.HasValue) ev.Price = dto.Price.Value;
 
+        if (dto.PingId.HasValue)
+        {
+            var ping = await appDb.Pings.FindAsync(dto.PingId.Value);
+            if (ping == null) throw new KeyNotFoundException("New Ping location not found");
+            
             ev.PingId = dto.PingId.Value;
             ev.Ping = ping; // Update the navigation property for the check below
         }
@@ -207,7 +212,6 @@ public class EventService(
         logger.LogInformation("Event updated: {EventId} by {UserId}", ev.Id, userId);
 
         // Return updated DTO
-        // Re-fetch or reuse? Reuse is fine but need creator user info
         var creatorUser = await userManager.FindByIdAsync(ev.CreatedById);
         var creatorSummary = creatorUser != null
             ? new UserSummaryDto(creatorUser.Id, creatorUser.UserName!, creatorUser.FirstName, creatorUser.LastName, creatorUser.ProfileImageUrl)
@@ -369,6 +373,13 @@ public class EventService(
             .Where(e => e.IsPublic)
             .Where(e => e.EndTime > DateTime.UtcNow)
             .AsQueryable();
+
+        // Keyword Search
+        if (!string.IsNullOrWhiteSpace(filter.Query))
+        {
+            var search = filter.Query.Trim().ToLowerInvariant();
+            query = query.Where(e => e.Title.ToLower().Contains(search) || (e.Description != null && e.Description.ToLower().Contains(search)));
+        }
 
         // Geospatial: Required
         if (filter.Latitude.HasValue && filter.Longitude.HasValue && filter.RadiusKm.HasValue)

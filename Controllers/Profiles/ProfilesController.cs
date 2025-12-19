@@ -39,16 +39,17 @@ namespace Ping.Controllers.Profiles
             }
         }
         
-        // GET /api/profiles/search?username=someUsername
+        // GET /api/profiles/search?username=someUsername&pageNumber=1&pageSize=10
         [HttpGet("search")]
-        public async Task<ActionResult<List<ProfileDto>>> Search([FromQuery] string username)
+        public async Task<ActionResult<PaginatedResult<ProfileDto>>> Search([FromQuery] string username, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 15)
         {
-            var yourUsername = User.FindFirstValue(ClaimTypes.Name);
-            if (yourUsername is null) return Unauthorized();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
 
             try
             {
-                var users = await profileService.SearchProfilesAsync(username, yourUsername);
+                var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+                var users = await profileService.SearchProfilesAsync(username, userId, pagination);
                 return Ok(users);
             }
             catch (ArgumentException ex)

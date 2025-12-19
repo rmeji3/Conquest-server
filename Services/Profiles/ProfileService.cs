@@ -149,33 +149,30 @@ public class ProfileService(
             );
     }
 
-    public async Task<List<ProfileDto>> SearchProfilesAsync(string query, string currentUsername)
+    public async Task<PaginatedResult<ProfileDto>> SearchProfilesAsync(string query, string currentUserId, PaginationParams pagination)
     {
         if (string.IsNullOrWhiteSpace(query))
-            throw new ArgumentException("Username query parameter is required.");
+            throw new ArgumentException("Search query is required.");
 
         var normalized = query.ToUpper(); // match Identity normalization
-
-        var currentUser = await userManager.FindByNameAsync(currentUsername);
-        var currentUserId = currentUser?.Id;
 
         var queryable = userManager.Users
             .AsNoTracking()
             .Where(u => u.NormalizedUserName!.StartsWith(normalized)
-            && u.NormalizedUserName != currentUsername.ToUpper());
+            && u.Id != currentUserId);
 
-        if (currentUserId != null)
+        var blacklisted = await blockService.GetBlacklistedUserIdsAsync(currentUserId);
+        if (blacklisted.Count > 0)
         {
-            var blacklisted = await blockService.GetBlacklistedUserIdsAsync(currentUserId);
-            if (blacklisted.Count > 0)
-            {
-                queryable = queryable.Where(u => !blacklisted.Contains(u.Id));
-            }
+            queryable = queryable.Where(u => !blacklisted.Contains(u.Id));
         }
+
+        var totalCount = await queryable.CountAsync();
 
         var users = await queryable
             .OrderBy(u => u.UserName)
-            .Take(15)
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .Select(u => new ProfileDto(
                 u.Id,
                 u.UserName!,
@@ -183,11 +180,11 @@ public class ProfileService(
                 u.LastName,
                 u.ProfileImageUrl,
                 null, // Reviews
-                null, // Places
+                null, // Pings
                 null, // Events
                 FriendshipStatus.None, // FriendshipStatus - not calculated for search list yet
                 0, // ReviewCount
-                0, // PlaceVisitCount
+                0, // PingCount
                 0, // EventCount
                 false, // IsFriends
                 u.ReviewsPrivacy,
@@ -198,7 +195,7 @@ public class ProfileService(
 
         logger.LogDebug("Profile search for '{Query}' returned {Count} results.", query, users.Count);
 
-        return users;
+        return new PaginatedResult<ProfileDto>(users, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 
 

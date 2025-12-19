@@ -1151,3 +1151,25 @@ Users can organize their "Saved Places" (favorited pings) into named groups call
 - **Pings**:
   - `POST /api/collections/{id}/pings`: Add a ping to a collection.
   - `DELETE /api/collections/{id}/pings/{pingId}`: Remove a ping from a collection.
+
+---
+## 24. Unified Search
+
+### Overview
+The Unified Search endpoint allows users to search across multiple entity types (Profiles, Pings, and Events) in a single request. It supports various filters and provides paginated results for each category.
+
+### Features
+- **Keyword Search**: Searches usernames (Profiles), names/addresses (Pings), and titles/descriptions (Events).
+- **Geospatial Filtering**: Optional coordinates and radius for Pings and Events.
+- **Tag Search**: Filter Pings based on tags present in their reviews.
+- **Event Filtering**: Specific filters for event genre, price range, and date range.
+- **Pagination**: Independent pagination for each result category within the response.
+
+### DTOs
+- `UnifiedSearchFilterDto`: Input parameters for search and filtering.
+- `UnifiedSearchResultDto`: Grouped paginated results.
+
+### Endpoints
+- `GET /api/search` or `GET /api/v1/search`:
+  - **Parameters**: `Query`, `Latitude`, `Longitude`, `RadiusKm`, `PageNumber`, `PageSize`, `EventGenreId`, `MinPrice`, `MaxPrice`, `FromDate`, `ToDate`, `PingGenreId`, `Tags`.
+  - **Return**: `UnifiedSearchResultDto` containing `Profiles`, `Pings`, and `Events`.
