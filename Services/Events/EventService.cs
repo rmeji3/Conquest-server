@@ -14,9 +14,11 @@ namespace Ping.Services.Events;
 
 public class EventService(
     AppDbContext appDb,
+    AuthDbContext authDb,
     UserManager<AppUser> userManager,
     IModerationService moderationService,
     Services.Blocks.IBlockService blockService,
+    Services.Follows.IFollowService followService,
     ILogger<EventService> logger) : IEventService
 {
     public async Task<EventDto> CreateEventAsync(CreateEventDto dto, string userId)
@@ -59,7 +61,10 @@ public class EventService(
             CreatedById = userId,
             CreatedAt = DateTime.UtcNow,
             PingId = dto.PingId,
-            EventGenreId = dto.EventGenreId
+            EventGenreId = dto.EventGenreId,
+            ImageUrl = dto.ImageUrl,
+            ThumbnailUrl = dto.ThumbnailUrl,
+            Price = dto.Price
         };
         
         if (dto.PingId.HasValue)
@@ -115,7 +120,12 @@ public class EventService(
             ev.Longitude,
             ev.PingId,
             ev.EventGenreId,
-            ev.EventGenre?.Name
+            ev.EventGenre?.Name,
+            ev.ImageUrl ?? null,
+            ev.ThumbnailUrl ?? null,
+            ev.Price ?? null,
+            true, // IsHosting (creator)
+            new List<string>() // FriendThumbnails (no other attendees)
         );
     }
 
@@ -185,6 +195,11 @@ public class EventService(
         if (dto.Latitude.HasValue) ev.Latitude = dto.Latitude.Value;
         if (dto.Longitude.HasValue) ev.Longitude = dto.Longitude.Value;
         if (dto.EventGenreId.HasValue) ev.EventGenreId = dto.EventGenreId.Value;
+        
+        // Apply new optional fields
+        if (dto.ImageUrl != null) ev.ImageUrl = dto.ImageUrl;
+        if (dto.ThumbnailUrl != null) ev.ThumbnailUrl = dto.ThumbnailUrl;
+        if (dto.Price.HasValue) ev.Price = dto.Price.Value;
 
         // Ping Linking & Unlinking Logic
         // Scenario 1: User selected a specific Ping (Pin) -> Link it and overwrite location details
@@ -221,7 +236,9 @@ public class EventService(
         var attendeeUsers = await userManager.Users.Where(u => attendeeIds.Contains(u.Id)).ToListAsync();
         var usersById = attendeeUsers.ToDictionary(u => u.Id);
         
-        return EventMapper.MapToDto(ev, creatorSummary, usersById, userId); 
+        var friendIds = await followService.GetMutualIdsAsync(userId);
+
+        return EventMapper.MapToDto(ev, creatorSummary, usersById, userId, friendIds); 
     }
 
     public async Task<EventDto?> GetEventByIdAsync(int id, string? userId = null)
@@ -245,7 +262,13 @@ public class EventService(
         
         var usersById = attendeeUsers.ToDictionary(u => u.Id);
 
-        return EventMapper.MapToDto(ev, creatorSummary, usersById, userId); 
+        IReadOnlyList<string>? friendIds = null;
+        if (userId != null)
+        {
+            friendIds = await followService.GetMutualIdsAsync(userId);
+        }
+
+        return EventMapper.MapToDto(ev, creatorSummary, usersById, userId, friendIds); 
     }
     
     public async Task<PaginatedResult<EventDto>> GetMyEventsAsync(string userId, PaginationParams pagination)
@@ -352,16 +375,54 @@ public class EventService(
         return await MapEventsBatchAsync(query, userId, pagination);
     }
 
-    public async Task<PaginatedResult<EventDto>> GetPublicEventsAsync(double minLat, double maxLat, double minLng, double maxLng, PaginationParams pagination, string? userId = null)
+    public async Task<PaginatedResult<EventDto>> GetPublicEventsAsync(EventFilterDto filter, PaginationParams pagination, string? userId = null)
     {
         var query = appDb.Events
             .Include(e => e.Attendees)
             .Where(e => e.IsPublic)
             .Where(e => e.EndTime > DateTime.UtcNow)
-            .Where(e => e.Latitude >= minLat && e.Latitude <= maxLat &&
-                        e.Longitude >= minLng && e.Longitude <= maxLng)
-            .OrderBy(e => e.StartTime)
             .AsQueryable();
+
+        // Geospatial: Required
+        if (filter.Latitude.HasValue && filter.Longitude.HasValue && filter.RadiusKm.HasValue)
+        {
+            var minLat = filter.Latitude.Value - (filter.RadiusKm.Value / 111.32);
+            var maxLat = filter.Latitude.Value + (filter.RadiusKm.Value / 111.32);
+            var lngDelta = filter.RadiusKm.Value / (111.32 * Math.Cos(filter.Latitude.Value * Math.PI / 180.0));
+            var minLng = filter.Longitude.Value - lngDelta;
+            var maxLng = filter.Longitude.Value + lngDelta;
+
+            query = query.Where(e => e.Latitude >= minLat && e.Latitude <= maxLat &&
+                                     e.Longitude >= minLng && e.Longitude <= maxLng);
+        }
+
+        // Price Filter
+        if (filter.MinPrice.HasValue)
+        {
+            query = query.Where(e => e.Price >= filter.MinPrice.Value);
+        }
+        if (filter.MaxPrice.HasValue)
+        {
+            query = query.Where(e => e.Price <= filter.MaxPrice.Value);
+        }
+
+        // Date Range
+        if (filter.FromDate.HasValue)
+        {
+            query = query.Where(e => e.StartTime >= filter.FromDate.Value);
+        }
+        if (filter.ToDate.HasValue)
+        {
+            query = query.Where(e => e.StartTime <= filter.ToDate.Value);
+        }
+
+        // Genre
+        if (filter.GenreId.HasValue)
+        {
+            query = query.Where(e => e.EventGenreId == filter.GenreId.Value);
+        }
+
+        query = query.OrderBy(e => e.StartTime);
 
         // Filter Blacklisted Users
         if (userId != null)
@@ -468,6 +529,12 @@ public class EventService(
         
         var usersById = users.ToDictionary(u => u.Id);
 
+        IReadOnlyList<string>? friendIds = null;
+        if (currentUserId != null)
+        {
+            friendIds = await followService.GetMutualIdsAsync(currentUserId);
+        }
+
         // 4. Map
         var dtos = new List<EventDto>();
         foreach (var ev in events)
@@ -478,10 +545,170 @@ public class EventService(
             }
             var creatorSummary = new UserSummaryDto(creator.Id, creator.UserName!, creator.FirstName, creator.LastName, creator.ProfileImageUrl);
 
-            dtos.Add(EventMapper.MapToDto(ev, creatorSummary, usersById, currentUserId));
+            dtos.Add(EventMapper.MapToDto(ev, creatorSummary, usersById, currentUserId, friendIds));
         }
 
         return new PaginatedResult<EventDto>(dtos, count, pagination.PageNumber, pagination.PageSize);
+    }
+
+    public async Task<EventCommentDto> AddCommentAsync(int eventId, string userId, string content)
+    {
+        // Validation: Max 100 words (word count approx)
+        if (string.IsNullOrWhiteSpace(content)) throw new ArgumentException("Comment cannot be empty.");
+        
+        var wordCount = content.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        if (wordCount > 100)
+        {
+            throw new ArgumentException($"Comment exceeds 100 words limit (Current: {wordCount}).");
+        }
+
+        var ev = await appDb.Events.FindAsync(eventId);
+        if (ev == null) throw new KeyNotFoundException("Event not found.");
+
+        // Check moderation
+        var check = await moderationService.CheckContentAsync(content);
+        if (check.IsFlagged) throw new ArgumentException($"Comment violates content policy: {check.Reason}");
+
+        var comment = new EventComment
+        {
+            EventId = eventId,
+            UserId = userId,
+            Content = content,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        appDb.EventComments.Add(comment);
+        await appDb.SaveChangesAsync();
+
+        var user = await userManager.FindByIdAsync(userId);
+
+        return new EventCommentDto(
+            comment.Id,
+            comment.Content,
+            comment.CreatedAt,
+            userId,
+            user?.UserName ?? "Unknown",
+            user?.ProfileImageUrl,
+            user?.ProfileThumbnailUrl
+        );
+    }
+
+    public async Task<PaginatedResult<EventCommentDto>> GetCommentsAsync(int eventId, PaginationParams pagination)
+    {
+        var query = appDb.EventComments
+            .AsNoTracking()
+            .Where(c => c.EventId == eventId)
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new EventCommentDto(
+                c.Id,
+                c.Content,
+                c.CreatedAt,
+                c.UserId,
+                c.User!.UserName!,
+                c.User.ProfileImageUrl,
+                c.User.ProfileThumbnailUrl
+            ));
+        
+        return await query.ToPaginatedResultAsync(pagination);
+    }
+
+    public async Task<EventCommentDto> UpdateCommentAsync(int commentId, string userId, string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) throw new ArgumentException("Comment cannot be empty.");
+        
+        var wordCount = content.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        if (wordCount > 100)
+        {
+            throw new ArgumentException($"Comment exceeds 100 words limit (Current: {wordCount}).");
+        }
+
+        var comment = await appDb.EventComments.FindAsync(commentId);
+        if (comment == null) throw new KeyNotFoundException("Comment not found.");
+
+        if (comment.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("Not comment owner.");
+        }
+
+        var check = await moderationService.CheckContentAsync(content);
+        if (check.IsFlagged) throw new ArgumentException($"Comment violates content policy: {check.Reason}");
+
+        comment.Content = content;
+        
+        await appDb.SaveChangesAsync();
+
+        var user = await userManager.FindByIdAsync(userId);
+        return new EventCommentDto(
+            comment.Id,
+            comment.Content,
+            comment.CreatedAt,
+            userId,
+            user?.UserName ?? "Unknown",
+            user?.ProfileImageUrl,
+            user?.ProfileThumbnailUrl
+        );
+    }
+
+    public async Task<bool> DeleteCommentAsync(int commentId, string userId)
+    {
+        var comment = await appDb.EventComments.FindAsync(commentId);
+        if (comment == null) return false;
+
+        // Allow deletion if owner or admin (admin check logic might be higher up, but for service method usually owner)
+        // Also Event Owner could potentially delete? For now, only Comment Owner.
+        if (comment.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("Not comment owner.");
+        }
+
+        appDb.EventComments.Remove(comment);
+        await appDb.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<PaginatedResult<FriendInviteDto>> GetFriendsToInviteAsync(int eventId, string userId, PaginationParams pagination)
+    {
+        // Mutuals: Users I follow who also follow me
+        var friendsQuery = authDb.Follows
+            .Where(f => f.FollowerId == userId && 
+                        authDb.Follows.Any(f2 => f2.FollowerId == f.FolloweeId && f2.FolloweeId == userId))
+            .Select(f => f.Followee);
+
+        var totalCount = await friendsQuery.CountAsync();
+        
+        var friends = await friendsQuery
+            .OrderBy(u => u.UserName)
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
+            .Select(u => new { u.Id, u.UserName, u.FirstName, u.LastName, u.ProfileImageUrl })
+            .ToListAsync();
+
+        if (!friends.Any())
+        {
+            return new PaginatedResult<FriendInviteDto>(new List<FriendInviteDto>(), totalCount, pagination.PageNumber, pagination.PageSize);
+        }
+
+        var friendIds = friends.Select(f => f.Id).ToList();
+
+        var attendees = await appDb.EventAttendees
+            .Where(a => a.EventId == eventId && friendIds.Contains(a.UserId))
+            .Select(a => new { a.UserId, a.Status })
+            .ToListAsync();
+            
+        var attendeeMap = attendees.ToDictionary(a => a.UserId, a => a.Status);
+
+        var dtos = friends.Select(f => 
+        {
+            string status = "None";
+            if (attendeeMap.TryGetValue(f.Id, out var attStatus))
+            {
+                status = attStatus.ToString(); 
+            }
+            
+            return new FriendInviteDto(f.Id, f.UserName!, f.FirstName, f.LastName, f.ProfileImageUrl, status);
+        }).ToList();
+
+        return new PaginatedResult<FriendInviteDto>(dtos, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 }
 

@@ -56,6 +56,7 @@ Ping is an ASP.NET Core API (targeting .NET 9) that manages users, pings, activi
 ---
 ## 3. Configuration & Startup (`Program.cs`)
 Registered services:
+- **ImageService**: `IImageService` (scoped) for resizing and uploading.
 - Two DbContexts (`AuthDbContext`, `AppDbContext`) using either **SQLite** or **PostgreSQL** based on `DatabaseProvider` config.
 - IdentityCore for `AppUser` + Roles + SignInManager + TokenProviders.
 - JWT options bound from `configuration["Jwt"]` (Key, Issuer, Audience, AccessTokenMinutes).
@@ -165,11 +166,11 @@ Required `appsettings.json` keys:
 ## 5. Database Contexts
 ### AuthDbContext
 DbSets:
-- `Friendships` (composite PK: `{UserId, FriendId}`)
+- `Follows` (composite PK: `{FollowerId, FolloweeId}`)
 - `UserBlocks` (composite PK: `{BlockerId, BlockedId}`)
 - `IpBans` (PK: `IpAddress`)
 Relationships:
-- `Friendship.User` and `Friendship.Friend` each `Restrict` delete.
+- `Follow.Follower` and `Follow.Followee` each `Restrict` delete.
 - `UserBlock.Blocker` and `UserBlock.Blocked` each `Cascade` delete.
 Indexes:
 - Unique index on `AppUser.UserName`.
@@ -214,7 +215,7 @@ Property Configuration:
 | ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | AppUser       | `IdentityUser`     | FirstName, LastName, ProfileImageUrl, IsBanned, BanCount, LastIpAddress, BanReason, LastLoginUtc, CreatedUtc |(Friends)                              | Stored in Auth DB; Unverified users deleted after 12h; PingsPrivacy/ReviewsPrivacy settings |
 | IpBan         | IpAddress          | Reason, CreatedAt, ExpiresAt                                                                                             | (None)                                 | Stores banned IPs                                                                                                     |
-| Friendship    | (UserId, FriendId) | Status (Pending/Accepted/Blocked), CreatedAt                                                                             | User, Friend                           | Symmetric friendship stored as two Accepted rows after accept                                                         |
+| Follow        | (FollowerId, FolloweeId) | CreatedAt                                                                                                                | Follower, Followee                     | Unidirectional follow. Friendship = Mutual Follow.                                                                    |
 | Ping          | Id                 | Name, Address, **Location (Point)**, Latitude*, Longitude*, OwnerUserId, Visibility (Public/Private/Friends), Type (Verified/Custom), CreatedUtc, GooglePlaceId? | PingActivities                        | OwnerUserId is string (Identity FK); Visibility controls access; Type determines duplicate logic; *Lat/Lon are computed props mapped to Location (SRID 4326) |
 | Favorited     | Id                 | UserId, PingId                                                                                                          | Ping                                  | Unique per user per ping; cascade deletes with Ping                                                                 |
 | PingGenre     | Id                 | Name                                                                                                                     | PingActivities                         | Seeded                                                                                                                |
@@ -253,7 +254,12 @@ Property Configuration:
 - `EventDto(Id, Title, Description?, IsPublic, StartTime, EndTime, Location, CreatedBy(UserSummaryDto), CreatedAt, Attendees[List<UserSummaryDto>], Status, Latitude, Longitude, PingId?, EventGenreId?, EventGenreName?, IsAdHoc)`
 - `UserSummaryDto(Id, UserName, FirstName, LastName)`
 - `CreateEventDto(Title, Description?, IsPublic, StartTime, EndTime, Location, Latitude, Longitude, PingId?, EventGenreId?)`
-- `UpdateEventDto(Title?, Description?, IsPublic?, StartTime?, EndTime?, Location?, Latitude?, Longitude?, PingId?, EventGenreId?)`
+- `UpdateEventDto(Title?, Description?, IsPublic?, StartTime?, EndTime?, Location?, Latitude?, Longitude?, PingId?, EventGenreId?, ImageUrl?, ThumbnailUrl?, Price?)`
+- `EventFilterDto(MinPrice?, MaxPrice?, FromDate?, ToDate?, GenreId?, Latitude, Longitude, RadiusKm)`
+- `EventCommentDto(Id, Content, CreatedAt, UserId, UserName, UserProfileImageUrl, UserProfileThumbnailUrl)`
+- `CreateEventCommentDto(Content)`
+- `CreateEventDto` also includes fields: `ImageUrl, ThumbnailUrl, Price`.
+- `ReviewDto`, `AppUser`, `EventDto` include `ThumbnailUrl`. `EventDto` includes `IsHosting`, `FriendThumbnails`, `Price`, `ImageUrl`.
 
 ### Friends & Blocks
 - `FriendSummaryDto(Id, UserName, FirstName, LastName, ProfileImageUrl?)`
@@ -344,14 +350,15 @@ Property Configuration:
 - **AI Moderation**: Checks Activity Name.
 - **Semantic Deduplication**: Uses AI to detect and merge duplicate activities (e.g., "Hoops" -> "Basketball"). Returns `WarningMessage` to frontend.
 
-#### FriendService (`IFriendService`)
-- Manages friendships (requests, accepts, blocks).
+#### FollowService (`IFollowService`)
+- Manages follower relationships (follow, unfollow, get followers/following).
+- **Mutuals**: Users who follow each other are considered "Friends".
 
 #### BlockService (`IBlockService`)
 - Manages user blocking interactions.
 - Stores blocks in `AuthDbContext`.
 - **Bidirectional Filtering**: Ensures neither user can see the other's content (reviews, events, profile).
-- **Friendship Removal**: Automatically removes any existing friendship links upon blocking.
+- **Friendship Removal**: Automatically removes mutual follows upon blocking.
 
 #### ProfileService (`IProfileService`)
 - Manages user profiles and search.
@@ -488,16 +495,20 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | POST   | /api/Events/{id}/leave                           | A    | —                | 200          | Removes attendee row                      |
 | DELETE | /api/Events/{id}                                 | A    | —                | 200          | Only creator                              |
 | PATCH  | /api/Events/{id}                                 | A    | `UpdateEventDto` | 200          | Partial updates                           |
-| GET    | /api/Events/public (Q: from,to,lat,lng,radiusKm, pageNumber, pageSize) | A    | —                | `PaginatedResult<EventDto>` | Bounding box geo filter + upcoming only   |
+| PATCH  | /api/Events/{id}                                 | A    | `UpdateEventDto` | 200          | Partial updates (incl Price, Image)       |
+| GET    | /api/Events/public (Q: EventFilterDto)           | A    | —                | `PaginatedResult<EventDto>` | Filters: Price, Date, Genre, Location     |
+| POST   | /api/Events/{id}/comments                        | A    | `CreateEventCommentDto` | `EventCommentDto` | Add comment (Max 100 words, Moderated) |
+| GET    | /api/Events/{id}/comments (Q: pageNumber, pageSize) | A | —               | `PaginatedResult` | Get comments (Newest first)               |
+| DELETE | /api/Events/comments/{id}                        | A    | —                | 204          | Delete comment (Owner only)               |
 
-### FriendsController (`/api/Friends`)
+### FollowsController (`/api/follows`)
 | Method | Route                          | Auth | Body | Returns              | Notes                                                    |
 | ------ | ------------------------------ | ---- | ---- | -------------------- | -------------------------------------------------------- |
-| GET    | /api/Friends/friends (Q: pageNumber, pageSize) | A    | —    | `PaginatedResult<FriendSummaryDto>` | Accepted friendships only                                |
-| POST   | /api/Friends/add/{username}    | A    | —    | 200                  | Creates Pending request if no existing relations         |
-| POST   | /api/Friends/accept/{username} | A    | —    | 200                  | Converts Pending to Accepted + adds reverse Accepted row |
-| POST   | /api/Friends/requests/incoming (Q: pageNumber, pageSize) | A    | —    | `PaginatedResult<FriendSummaryDto>` | Pending where current user is FriendId                   |
-| POST   | /api/Friends/remove/{username} | A    | —    | 200                  | Deletes both Accepted rows                               |
+| GET    | /api/follows/followers (Q: pageNumber, pageSize) | A | — | `PaginatedResult<FriendSummaryDto>` | List who follows me |
+| GET    | /api/follows/following (Q: pageNumber, pageSize) | A | — | `PaginatedResult<FriendSummaryDto>` | List who I follow |
+| GET    | /api/follows/mutuals (Q: pageNumber, pageSize)   | A | — | `PaginatedResult<FriendSummaryDto>` | List mutual connections (Friends) |
+| POST   | /api/follows/{targetId}        | A    | —    | 200                  | Follow a user |
+| DELETE | /api/follows/{targetId}        | A    | —    | 200                  | Unfollow a user |
 
 ### PingsController (`/api/pings`)
 | Method | Route                                                                              | Auth | Body             | Returns             | Notes                                                                                                           |
@@ -520,6 +531,11 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | GET    | /api/profiles/{id}/pings      | A    | —    | `PaginatedResult`    | Pings created by user (respects privacy)           |
 | GET    | /api/profiles/{id}/reviews     | A    | —    | `PaginatedResult`    | Reviews by user (respects privacy)                  |
 | GET    | /api/profiles/{id}/events      | A    | —    | `PaginatedResult`    | Events created by user (respects privacy)           |
+
+### ImagesController (`/api/images`)
+| Method | Route          | Auth | Body | Returns            | Notes |
+| ------ | -------------- | ---- | ---- | ------------------ | ----- |
+| POST   | /api/images (Q: folder) | A | Form | `{ originalUrl, thumbnailUrl }` | Resize to 500x500 thumbnail. Validates size/type. |
 
 ### ReportsController (`/api/reports`)
 | Method | Route           | Auth | Body               | Returns              | Notes                                               |
@@ -642,10 +658,11 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 - **Moderation**: Content is checked.
 - **Deduplication**: Semantically similar activities are merged (e.g. "Hoops" = "Basketball").
 
-### Friends
-- Prevents: duplicates, self-addition, blocked users
-- Bidirectional relationship: accepting creates two Accepted rows
-- Friend requests are Pending until accepted
+### Followers & Friends
+- **Follow**: Unidirectional. User A can follow User B without approval (unless private, future feature).
+- **Friend**: Defined as a **Mutual Follow** (A follows B AND B follows A).
+- **Visibility**: "Friends Only" visibility now means "Mutuals Only".
+- **Blocks**: Blocking removes follows in *both* directions.
 
 ### User Blocking
 - **Blocking is final for friendship**: If two users are friends and one blocks the other, the friendship is immediately deleted (both rows).

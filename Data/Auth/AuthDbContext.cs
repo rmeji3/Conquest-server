@@ -1,14 +1,14 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Ping.Models.AppUsers;
-using Ping.Models.Friends;
+using Ping.Models.Follows;
 using Ping.Models.Users; // Added for UserBlock
 
 namespace Ping.Data.Auth
 {
     public class AuthDbContext(DbContextOptions<AuthDbContext> options) : IdentityDbContext<AppUser>(options)
     {
-        public DbSet<Friendship> Friendships => Set<Friendship>();
+        public DbSet<Follow> Follows => Set<Follow>();
         public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
         public DbSet<IpBan> IpBans => Set<IpBan>();
         public DbSet<Ping.Models.Analytics.UserActivityLog> UserActivityLogs => Set<Ping.Models.Analytics.UserActivityLog>();
@@ -18,20 +18,20 @@ namespace Ping.Data.Auth
         {
             base.OnModelCreating(builder);
 
-            // Friendship
-            builder.Entity<Friendship>()
-                .HasKey(f => new { f.UserId, f.FriendId });
+            // Follows
+            builder.Entity<Follow>()
+                .HasKey(f => new { f.FollowerId, f.FolloweeId });
 
-            builder.Entity<Friendship>()
-                .HasOne(f => f.User)
+            builder.Entity<Follow>()
+                .HasOne(f => f.Follower)
                 .WithMany()
-                .HasForeignKey(f => f.UserId)
+                .HasForeignKey(f => f.FollowerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.Entity<Friendship>()
-                .HasOne(f => f.Friend)
+            builder.Entity<Follow>()
+                .HasOne(f => f.Followee)
                 .WithMany()
-                .HasForeignKey(f => f.FriendId)
+                .HasForeignKey(f => f.FolloweeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // AppUser - usually Identity handles this but maintaining existing index

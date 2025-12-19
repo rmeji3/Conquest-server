@@ -10,6 +10,8 @@ namespace Ping.Models.AppUsers
 
         [MaxLength(512)]
         public string? ProfileImageUrl { get; set; } // nullable, NOT required
+        [MaxLength(512)]
+        public string? ProfileThumbnailUrl { get; set; }
 
         public PrivacyConstraint ReviewsPrivacy { get; set; } = PrivacyConstraint.Public;
         public PrivacyConstraint PingsPrivacy { get; set; } = PrivacyConstraint.Public;

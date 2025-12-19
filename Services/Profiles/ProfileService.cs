@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 using Ping.Data.App;
-using Ping.Services.Friends;
-using Ping.Models.Friends; // For FriendshipStatus enum
+using Ping.Services.Follows;
+using Ping.Models.Follows; // For Follow model if needed
 using FriendshipStatus = Ping.Dtos.Profiles.FriendshipStatus; // Alias for DTO enum
 using Ping.Services.Storage;
 using Ping.Dtos.Activities; // For ActivitySummaryDto
@@ -25,9 +25,9 @@ namespace Ping.Services.Profiles;
 public class ProfileService(
     UserManager<AppUser> userManager, 
     ILogger<ProfileService> logger, 
-    IStorageService storageService,
+    Ping.Services.Images.IImageService imageService,
     AppDbContext appDb,
-    IFriendService friendService,
+    IFollowService followService,
     IBlockService blockService) : IProfileService
 {
     public async Task<PersonalProfileDto> GetMyProfileAsync(string userId)
@@ -60,9 +60,11 @@ public class ProfileService(
                 .Where(u => distinctUserIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id);
 
+            var friendIds = await followService.GetMutualIdsAsync(userId);
+
             foreach (var evt in upcomingEvents)
             {
-                events.Add(EventMapper.MapToDto(evt, creatorSummary, attendeeUsers, userId));
+                events.Add(EventMapper.MapToDto(evt, creatorSummary, attendeeUsers, userId, friendIds));
             }
 
         }
@@ -80,6 +82,7 @@ public class ProfileService(
                 user.UserName!,
                 user.ProfileImageUrl,
                 r.ImageUrl,
+                r.ThumbnailUrl,
                 r.CreatedAt,
                 r.LikesList.Count,
                 r.LikesList.Any(l => l.UserId == userId),
@@ -207,33 +210,18 @@ public class ProfileService(
             throw new KeyNotFoundException("User not found.");
         }
 
-        // Validate file
-        // 5MB limit
-        if (file.Length > 5 * 1024 * 1024)
-        {
-            throw new ArgumentException("File size exceeds 5MB limit.");
-        }
-
-        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
-        if (!allowedTypes.Contains(file.ContentType))
-        {
-            throw new ArgumentException("Invalid file type. Only JPEG, PNG, and WebP are allowed.");
-        }
-
-        // Generate key: profiles/{userId}/{timestamp}-{random}.ext
-        var ext = Path.GetExtension(file.FileName);
-        var key = $"profiles/{userId}/{DateTime.UtcNow.Ticks}{ext}";
-
-        // Upload
-        var url = await storageService.UploadFileAsync(file, key);
+        // Use ImageService to handle validation, resizing, and uploading
+        // We use "profiles" as the folder name
+        var (originalUrl, thumbnailUrl) = await imageService.ProcessAndUploadImageAsync(file, "profiles", userId);
 
         // Update User
-        user.ProfileImageUrl = url;
+        user.ProfileImageUrl = originalUrl;
+        user.ProfileThumbnailUrl = thumbnailUrl;
         await userManager.UpdateAsync(user);
         
-        logger.LogInformation("Updated profile image for user {UserId} to {Url}", userId, url);
+        logger.LogInformation("Updated profile image for user {UserId}. Original: {Original}, Thumb: {Thumb}", userId, originalUrl, thumbnailUrl);
 
-        return url;
+        return originalUrl;
     }
 
     public async Task<ProfileDto> GetProfileByIdAsync(string targetUserId, string currentUserId)
@@ -258,23 +246,15 @@ public class ProfileService(
 
         var isSelf = targetUserId == currentUserId;
         
-        // Friendship
-        var fsStatus = await friendService.GetFriendshipStatusAsync(currentUserId, targetUserId);
-        var friendshipStatus = FriendshipStatus.None;
-        
-        // Map Friendship.FriendshipStatus (Model) to Dto.FriendshipStatus
-        if ((int)fsStatus != 999) 
-        {
-             // Assuming matching names/values roughly, but let's map explicitly
-             switch (fsStatus)
-             {
-                 case Friendship.FriendshipStatus.Accepted: friendshipStatus = FriendshipStatus.Accepted; break;
-                 case Friendship.FriendshipStatus.Pending: friendshipStatus = FriendshipStatus.Pending; break;
-                 case Friendship.FriendshipStatus.Blocked: friendshipStatus = FriendshipStatus.Blocked; break;
-             }
-        }
+        // Friendship: "Friends" = Mutual Follows.
+        var isFollowing = await followService.IsFollowingAsync(currentUserId, targetUserId);
+        var isFollowedBy = await followService.IsFollowingAsync(targetUserId, currentUserId);
+        var isFriend = isFollowing && isFollowedBy;
 
-        var isFriend = friendshipStatus == FriendshipStatus.Accepted;
+        var friendshipStatus = FriendshipStatus.None;
+        if (isFriend) friendshipStatus = FriendshipStatus.Accepted;
+        else if (isFollowing) friendshipStatus = FriendshipStatus.Following;
+        // else: None (even if they follow me, if I don't follow back, no special status in this specific enum for now unless we added 'Follower')
 
         // Stats
         var reviewCount = await appDb.Reviews.CountAsync(r => r.UserId == targetUserId);
@@ -315,6 +295,7 @@ public class ProfileService(
                      user.UserName!, // Target user name
                      user.ProfileImageUrl,
                      r.ImageUrl,
+                     r.ThumbnailUrl,
                      r.CreatedAt,
                      r.LikesList.Count,
                      r.LikesList.Any(l => l.UserId == currentUserId), // IsLiked
@@ -456,9 +437,11 @@ public class ProfileService(
                     .Where(u => distinctUserIds.Contains(u.Id))
                     .ToDictionaryAsync(u => u.Id);
 
+                var friendIds = await followService.GetMutualIdsAsync(currentUserId);
+
                 foreach (var evt in upcomingEvents)
                 {
-                    events.Add(EventMapper.MapToDto(evt, creatorSummary, attendeeUsers, currentUserId));
+                    events.Add(EventMapper.MapToDto(evt, creatorSummary, attendeeUsers, currentUserId, friendIds));
                 }
             }
 
@@ -504,19 +487,13 @@ public class ProfileService(
         }
 
         // Friendship
-        var fsStatus = await friendService.GetFriendshipStatusAsync(currentUserId, targetUserId);
+        var isFollowing = await followService.IsFollowingAsync(currentUserId, targetUserId);
+        var isFollowedBy = await followService.IsFollowingAsync(targetUserId, currentUserId);
+        var isFriend = isFollowing && isFollowedBy;
+
         var friendshipStatus = FriendshipStatus.None;
-        
-        if ((int)fsStatus != 999) 
-        {
-             switch (fsStatus)
-             {
-                 case Friendship.FriendshipStatus.Accepted: friendshipStatus = FriendshipStatus.Accepted; break;
-                 case Friendship.FriendshipStatus.Pending: friendshipStatus = FriendshipStatus.Pending; break;
-                 case Friendship.FriendshipStatus.Blocked: friendshipStatus = FriendshipStatus.Blocked; break;
-             }
-        }
-        var isFriend = friendshipStatus == FriendshipStatus.Accepted;
+        if (isFriend) friendshipStatus = FriendshipStatus.Accepted;
+        else if (isFollowing) friendshipStatus = FriendshipStatus.Following;
 
         // Stats
         var reviewCount = await appDb.Reviews.CountAsync(r => r.UserId == targetUserId);
@@ -557,8 +534,9 @@ public class ProfileService(
         }
 
         // Check Privacy
-        var fsStatus = await friendService.GetFriendshipStatusAsync(currentUserId, targetUserId);
-        var isFriend = fsStatus == Friendship.FriendshipStatus.Accepted;
+        var isFollowing = await followService.IsFollowingAsync(currentUserId, targetUserId);
+        var isFollowedBy = await followService.IsFollowingAsync(targetUserId, currentUserId);
+        var isFriend = isFollowing && isFollowedBy;
         var isSelf = targetUserId == currentUserId;
 
         // If not self, check privacy settings
@@ -725,12 +703,14 @@ public class ProfileService(
                 .Where(u => allAttendeeIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id);
 
+            var friendIds = await followService.GetMutualIdsAsync(currentUserId);
+
             foreach (var evt in pagedEvents)
             {
                 if (creators.TryGetValue(evt.CreatedById, out var creator))
                 {
                     var creatorSummary = new UserSummaryDto(creator.Id, creator.UserName!, creator.FirstName, creator.LastName, creator.ProfileImageUrl);
-                    eventDtos.Add(EventMapper.MapToDto(evt, creatorSummary, attendeesMap, currentUserId));
+                    eventDtos.Add(EventMapper.MapToDto(evt, creatorSummary, attendeesMap, currentUserId, friendIds));
                 }
             }
         }

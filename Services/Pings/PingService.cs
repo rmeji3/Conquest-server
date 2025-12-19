@@ -6,7 +6,7 @@ using Ping.Models.Pings;
 using Ping.Models.Business;
 using Ping.Utils;
 using Ping.Models.Reviews;
-using Ping.Services.Friends;
+using Ping.Services.Follows;
 using Ping.Services.Google;
 using Ping.Services.Redis;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +20,7 @@ public class PingService(
     IRedisService redis,
     IConfiguration config,
     IPingNameService pingNameService,
-    IFriendService friendService,
+    IFollowService followService,
     Services.Moderation.IModerationService moderationService,
     Services.AI.ISemanticService semanticService,
     ILogger<PingService> logger) : IPingService
@@ -264,7 +264,7 @@ public class PingService(
 
             if (p.Visibility == PingVisibility.Friends && userId != null)
             {
-                var friendIds = await friendService.GetFriendIdsAsync(userId);
+                var friendIds = await followService.GetMutualIdsAsync(userId);
                 var isFriend = friendIds.Contains(p.OwnerUserId);
                 if (!isFriend) return null;
             }
@@ -358,7 +358,7 @@ public class PingService(
         var friendIds = new HashSet<string>();
         if (userId != null)
         {
-            var ids = await friendService.GetFriendIdsAsync(userId);
+            var ids = await followService.GetMutualIdsAsync(userId);
             friendIds = ids.ToHashSet();
         }
 
@@ -405,7 +405,7 @@ public class PingService(
             }
             else if (p.Visibility == PingVisibility.Friends)
             {
-                var friendIds = await friendService.GetFriendIdsAsync(userId);
+                var friendIds = await followService.GetMutualIdsAsync(userId);
                 var isFriend = friendIds.Contains(p.OwnerUserId);
                 isVisible = isFriend;
             }

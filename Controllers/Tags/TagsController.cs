@@ -15,9 +15,9 @@ public class TagsController(ITagService tagService) : ControllerBase
 {
     [HttpGet("popular")]
     [AllowAnonymous] // Public can see popular tags
-    public async Task<ActionResult<IEnumerable<TagDto>>> GetPopularTags([FromQuery] int count = 20)
+    public async Task<ActionResult<IEnumerable<TagDto>>> GetPopularTags([FromQuery] int count = 20, [FromQuery] int? pingId = null)
     {
-        var tags = await tagService.GetPopularTagsAsync(count);
+        var tags = await tagService.GetPopularTagsAsync(count, pingId);
         return Ok(tags);
     }
 

@@ -16,7 +16,12 @@ public record EventDto(
     double longitude,
     int? PingId,
     int? EventGenreId,
-    string? EventGenreName
+    string? EventGenreName,
+    string? ImageUrl,
+    string? ThumbnailUrl,
+    double? Price,
+    bool IsHosting,
+    List<string> FriendThumbnails
 )
 {
     public bool IsAdHoc => PingId == null;
@@ -49,7 +54,10 @@ public record CreateEventDto(
     double Latitude,
     double Longitude,
     int? PingId,
-    int? EventGenreId
+    int? EventGenreId,
+    string? ImageUrl,
+    string? ThumbnailUrl,
+    double? Price
 );
 
 public class UpdateEventDto
@@ -64,5 +72,8 @@ public class UpdateEventDto
     public double? Longitude { get; set; }
     public int? PingId { get; set; }
     public int? EventGenreId { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public double? Price { get; set; }
 }
 

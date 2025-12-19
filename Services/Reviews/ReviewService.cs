@@ -4,7 +4,7 @@ using Ping.Dtos.Reviews;
 using Ping.Models.AppUsers;
 using Ping.Models.Reviews;
 using Microsoft.AspNetCore.Identity;
-using Ping.Services.Friends;
+using Ping.Services.Follows;
 using Ping.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,7 +19,7 @@ namespace Ping.Services.Reviews;
 
 public class ReviewService(
     AppDbContext appDb,
-    IFriendService friendService,
+    IFollowService followService,
     UserManager<AppUser> userManager,
     Ping.Services.Moderation.IModerationService moderationService,
     IBlockService blockService,
@@ -73,7 +73,8 @@ public class ReviewService(
             Rating = dto.Rating,
             Type = hasReview ? ReviewType.CheckIn : ReviewType.Review,
             Content = dto.Content,
-            ImageUrl = dto.ImageUrl,
+            ImageUrl = dto.ImageUrl!,
+            ThumbnailUrl = dto.ThumbnailUrl!,
             CreatedAt = DateTime.UtcNow,
             Likes = 0,
         };
@@ -125,6 +126,7 @@ public class ReviewService(
             review.UserName,
             profileUrl,
             review.ImageUrl,
+            review.ThumbnailUrl,
             review.CreatedAt,
             review.Likes,
             false, // IsLiked
@@ -163,7 +165,8 @@ public class ReviewService(
                 }
             case "friends":
                 {
-                    var friendIds = await friendService.GetFriendIdsAsync(userId);
+                    var following = await followService.GetFollowingAsync(userId, new PaginationParams { PageNumber = 1, PageSize = 1000 }); // Simple fetch for now or need ID getter
+                    var friendIds = following.Items.Select(f => f.Id).ToHashSet(); // Optimization: Add GetFollowingIdsAsync to service?
                     if (friendIds.Count == 0)
                     {
                         return new PaginatedResult<UserReviewsDto>(new List<UserReviewsDto>(), 0, pagination.PageNumber, pagination.PageSize);
@@ -209,6 +212,7 @@ public class ReviewService(
             r.UserName,
             userMap.GetValueOrDefault(r.UserId),
             r.ImageUrl,
+            r.ThumbnailUrl,
             r.CreatedAt,
             r.Likes,
             likedReviewIds.Contains(r.Id), 
@@ -259,12 +263,20 @@ public class ReviewService(
                                      filter.PingGenreIds.Contains(r.PingActivity.Ping.PingGenreId.Value));
         }
 
-        // Filter by Search Query
-        if (!string.IsNullOrWhiteSpace(filter.SearchQuery))
+
+
+
+        // Filter by Tags
+        if (filter.Tags != null && filter.Tags.Any())
         {
-            var q = filter.SearchQuery.ToLower();
-            query = query.Where(r => r.PingActivity.Ping.Name.ToLower().Contains(q) ||
-                                     (r.PingActivity.Ping.Address != null && r.PingActivity.Ping.Address.ToLower().Contains(q)));
+             var tags = filter.Tags.Where(t => !string.IsNullOrWhiteSpace(t))
+                                   .Select(t => t.Trim().ToLower())
+                                   .ToHashSet();
+
+             if (tags.Count > 0)
+             {
+                 query = query.Where(r => r.ReviewTags.Any(rt => tags.Contains(rt.Tag.Name.ToLower())));
+             }
         }
 
         // Filter by Location (Bounding Box)
@@ -333,6 +345,7 @@ public class ReviewService(
             r.UserName,
             userMap.GetValueOrDefault(r.UserId),
             r.ImageUrl,
+            r.ThumbnailUrl,
             r.CreatedAt,
             r.Likes,
             likedReviewIds.Contains(r.Id), 
@@ -463,6 +476,7 @@ public class ReviewService(
                 rl.Review.UserName,
                 userMap.GetValueOrDefault(rl.Review.UserId),
                 rl.Review.ImageUrl,
+                rl.Review.ThumbnailUrl,
                 rl.Review.CreatedAt,
                 rl.Review.Likes,
                 true, // IsLiked
@@ -525,6 +539,7 @@ public class ReviewService(
             r.UserName,
             userMap.GetValueOrDefault(r.UserId),
             r.ImageUrl,
+            r.ThumbnailUrl,
             r.CreatedAt,
             r.Likes,
             likedReviewIds.Contains(r.Id),
@@ -592,6 +607,7 @@ public class ReviewService(
             r.UserName,
             userMap.GetValueOrDefault(r.UserId),
             r.ImageUrl,
+            r.ThumbnailUrl,
             r.CreatedAt,
             r.Likes,
             likedReviewIds.Contains(r.Id), 
@@ -607,7 +623,8 @@ public class ReviewService(
 
     public async Task<PaginatedResult<ExploreReviewDto>> GetFriendsFeedAsync(string userId, PaginationParams pagination)
     {
-        var friendIds = await friendService.GetFriendIdsAsync(userId);
+        var following = await followService.GetFollowingAsync(userId, new PaginationParams { PageNumber = 1, PageSize = 1000 });
+        var friendIds = following.Items.Select(f => f.Id).ToHashSet();
         
         if (friendIds.Count == 0)
         {
@@ -670,6 +687,7 @@ public class ReviewService(
             r.UserName,
             userMap.GetValueOrDefault(r.UserId),
             r.ImageUrl,
+            r.ThumbnailUrl,
             r.CreatedAt,
             r.Likes,
             likedReviewIds.Contains(r.Id), 

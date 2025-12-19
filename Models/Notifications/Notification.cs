@@ -5,10 +5,11 @@ namespace Ping.Models;
 
 public enum NotificationType
 {
-    FriendRequest = 0,
+    FriendRequest = 0, // Deprecated
     ReviewLike = 1,
     System = 2,
-    EventInvite = 3
+    EventInvite = 3,
+    NewFollower = 4
 }
 
 public class Notification

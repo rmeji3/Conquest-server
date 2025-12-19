@@ -25,5 +25,8 @@ public class Review
     [Required] // Enforce non-null in DB
     [MaxLength(500)]
     public string ImageUrl { get; set; } = null!;
+    [Required] // Enforce non-null in DB
+    [MaxLength(500)]
+    public string ThumbnailUrl { get; set; } = null!;
 }
 

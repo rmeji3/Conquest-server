@@ -1,0 +1,43 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
+using Ping.Services.Images;
+using System.Security.Claims;
+
+namespace Ping.Controllers;
+
+[ApiController]
+[ApiVersion("1.0")]
+[Route("api/[controller]")]
+[Route("api/v{version:apiVersion}/[controller]")]
+[Authorize]
+public class ImagesController(IImageService imageService) : ControllerBase
+{
+    // POST /api/images?folder=events
+    [HttpPost]
+    public async Task<ActionResult<ImageUploadResponse>> UploadImage([FromForm] IFormFile file, [FromQuery] string folder = "uploads")
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null) return Unauthorized();
+
+        // Validate folder to prevent arbitrary path writes? 
+        // Simple allowlist: events, reviews
+        var allowedFolders = new[] { "events", "reviews" };
+        if (!allowedFolders.Contains(folder.ToLower()))
+        {
+            return BadRequest("Invalid folder. Allowed: events, reviews");
+        }
+
+        try
+        {
+            var (original, thumbnail) = await imageService.ProcessAndUploadImageAsync(file, folder, userId);
+            return Ok(new ImageUploadResponse(original, thumbnail));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+}
+
+public record ImageUploadResponse(string Url, string ThumbnailUrl);

@@ -30,7 +30,8 @@ public enum FriendshipStatus
     None,
     Pending,
     Accepted,
-    Blocked
+    Blocked,
+    Following
 }
 
 public record QuickProfileDto(

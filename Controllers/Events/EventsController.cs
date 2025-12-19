@@ -79,6 +79,11 @@ namespace Ping.Controllers.Events
             [FromQuery] double? lat,
             [FromQuery] double? lng,
             [FromQuery] double? radiusKm,
+            [FromQuery] double? minPrice,
+            [FromQuery] double? maxPrice,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
+            [FromQuery] int? genreId,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -87,22 +92,22 @@ namespace Ping.Controllers.Events
                 return BadRequest("lat, lng, and radiusKm are required.");
             }
 
-            var centerLat = lat.Value;
-            var centerLng = lng.Value;
-            var radius = radiusKm.Value;
-            var latDelta = radius / 111.32;
-            var lngDelta = radius / (111.32 * Math.Cos(centerLat * Math.PI / 180.0));
+            var filter = new EventFilterDto
+            {
+                Latitude = lat,
+                Longitude = lng,
+                RadiusKm = radiusKm,
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                FromDate = fromDate,
+                ToDate = toDate,
+                GenreId = genreId
+            };
+
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            var result = await eventService.GetPublicEventsAsync(
-                centerLat - latDelta,
-                centerLat + latDelta,
-                centerLng - lngDelta,
-                centerLng + lngDelta,
-                pagination,
-                userId
-            );
+            var result = await eventService.GetPublicEventsAsync(filter, pagination, userId);
 
             return Ok(result);
         }
@@ -210,6 +215,21 @@ namespace Ping.Controllers.Events
             }
         }
 
+        // GET /api/events/{id}/invite-candidates
+        [HttpGet("{id:int}/invite-candidates")]
+        public async Task<ActionResult<PaginatedResult<FriendInviteDto>>> GetInviteCandidates(
+            int id,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await eventService.GetFriendsToInviteAsync(id, userId, pagination);
+            return Ok(result);
+        }
+
         // PATCH /api/Events/{id}
         [HttpPatch("{id:int}")]
         public async Task<ActionResult<EventDto>> UpdateEvent(int id, [FromBody] UpdateEventDto dto)
@@ -246,6 +266,84 @@ namespace Ping.Controllers.Events
             var result = await eventService.LeaveEventAsync(id, userId);
             if (!result) return NotFound("Not attending this event.");
             return Ok("Left event.");
+        }
+        // POST /api/events/{id}/comments
+        [HttpPost("{id:int}/comments")]
+        public async Task<ActionResult<EventCommentDto>> AddComment(int id, [FromBody] CreateEventCommentDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            try
+            {
+                var result = await eventService.AddCommentAsync(id, userId, dto.Content);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Event not found.");
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // GET /api/events/{id}/comments?pageNumber=1&pageSize=20
+        [HttpGet("{id:int}/comments")]
+        public async Task<ActionResult<PaginatedResult<EventCommentDto>>> GetComments(
+            int id,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
+            var result = await eventService.GetCommentsAsync(id, pagination);
+            return Ok(result);
+        }
+
+        // PATCH /api/events/comments/{commentId}
+        [HttpPatch("comments/{commentId:int}")]
+        public async Task<ActionResult<EventCommentDto>> UpdateComment(int commentId, [FromBody] UpdateEventCommentDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            try
+            {
+                var result = await eventService.UpdateCommentAsync(commentId, userId, dto.Content);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Comment not found.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // DELETE /api/events/comments/{commentId}
+        [HttpDelete("comments/{commentId:int}")]
+        public async Task<IActionResult> DeleteComment(int commentId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null) return Unauthorized();
+
+            try
+            {
+                var result = await eventService.DeleteCommentAsync(commentId, userId);
+                if (!result) return NotFound("Comment not found.");
+                return Ok("Comment deleted.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
         }
     }
 }

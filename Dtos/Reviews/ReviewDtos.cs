@@ -9,7 +9,8 @@ public record ReviewDto(
     string UserId,
     string UserName,
     string? ProfilePictureUrl,
-    string ImageUrl,
+    string? ImageUrl,
+    string? ThumbnailUrl,
     DateTime CreatedAt,
     int Likes,
     bool IsLiked,
@@ -22,7 +23,8 @@ public record CreateReviewDto(
     [MaxLength(1000, ErrorMessage = "Content must be at most 1000 characters.")]
     string? Content,
     [Required]
-    string ImageUrl,
+    string? ImageUrl,
+    string? ThumbnailUrl,
     List<string>? Tags = null
 );
 
@@ -42,6 +44,7 @@ public record ExploreReviewDto(
     string UserName,
     string? ProfilePictureUrl,
     string ImageUrl,
+    string ThumbnailUrl,
     DateTime CreatedAt,
     int Likes,
     bool IsLiked,
@@ -54,7 +57,7 @@ public class ExploreReviewsFilterDto
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public double? RadiusKm { get; set; }
-    public string? SearchQuery { get; set; }
+    public List<string>? Tags { get; set; }
     public List<int>? PingGenreIds { get; set; }
     public int PageSize { get; set; } = 20;
     public int PageNumber { get; set; } = 1;

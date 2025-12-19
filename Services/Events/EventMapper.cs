@@ -6,9 +6,11 @@ namespace Ping.Services.Events;
 
 public static class EventMapper
 {
-    public static EventDto MapToDto(Event ev, UserSummaryDto creatorSummary, Dictionary<string, AppUser> attendeeMap, string? currentUserId)
+    public static EventDto MapToDto(Event ev, UserSummaryDto creatorSummary, Dictionary<string, AppUser> attendeeMap, string? currentUserId, IReadOnlyList<string>? viewerFriendIds = null)
     {
         var attendeeSummaries = new List<EventAttendeeDto>();
+        var friendThumbnails = new List<string>();
+
         if (ev.Attendees != null)
         {
             foreach (var att in ev.Attendees)
@@ -23,12 +25,31 @@ public static class EventMapper
                         u.ProfileImageUrl,
                         att.Status.ToString().ToLower()
                     ));
+
+                    // Check if friend (only if attending?)
+                    // "show that your friends are attending" -> implies status Attending
+                    if (viewerFriendIds != null && 
+                        viewerFriendIds.Contains(u.Id) && 
+                        att.Status == AttendeeStatus.Attending &&
+                        friendThumbnails.Count < 5)
+                    {
+                        if (!string.IsNullOrEmpty(u.ProfileThumbnailUrl))
+                        {
+                            friendThumbnails.Add(u.ProfileThumbnailUrl);
+                        }
+                        else if (!string.IsNullOrEmpty(u.ProfileImageUrl))
+                        {
+                             friendThumbnails.Add(u.ProfileImageUrl);
+                        }
+                    }
                 }
             }
         }
 
         // Determine status based on currentUserId
         string status;
+        bool isHosting = false;
+
         if (currentUserId == null)
         {
             status = "unknown";
@@ -36,10 +57,12 @@ public static class EventMapper
         else if (ev.CreatedById == currentUserId)
         {
             status = "mine";
+            isHosting = true;
         }
         else if (ev.Attendees != null && ev.Attendees.Any(a => a.UserId == currentUserId))
         {
             status = "attending";
+            // Check specific status?
         }
         else
         {
@@ -61,8 +84,13 @@ public static class EventMapper
             ev.Latitude,
             ev.Longitude,
             ev.PingId,
-            null, // EventGenreId
-            null  // EventGenreName
+            ev.EventGenreId,
+            ev.EventGenre?.Name,
+            ev.ImageUrl,
+            ev.ThumbnailUrl,
+            ev.Price,
+            isHosting,
+            friendThumbnails
         );
     }
 }

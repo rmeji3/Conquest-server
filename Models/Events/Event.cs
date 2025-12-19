@@ -12,7 +12,9 @@ public class Event
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public required string Location { get; set; }
-
+    public string? ImageUrl { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public double? Price { get; set; }
 
     // FK to Identity user (string because IdentityUser<TKey> uses string by default)
     public required string CreatedById { get; set; }

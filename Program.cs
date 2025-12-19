@@ -7,7 +7,7 @@ using Ping.Data.App;
 using Ping.Dtos.Auth;
 using Ping.Features.Auth;
 using Ping.Models.AppUsers;
-using Ping.Services.Friends;
+using Ping.Services.Follows;
 using Ping.Services.Pings;
 using Ping.Services.Events;
 using Ping.Services.Reviews;
@@ -229,7 +229,7 @@ builder.Services.AddSession(options =>
 });
 
 // --- Services ---
-builder.Services.AddScoped<IFriendService, FriendService>();
+builder.Services.AddScoped<IFollowService, FollowService>();
 builder.Services.AddScoped<IPingService, PingService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
@@ -267,6 +267,7 @@ builder.Services.AddScoped<Ping.Services.AI.ISemanticService, Ping.Services.AI.O
 builder.Services.AddScoped<Ping.Services.Apple.AppleAuthService>();
 builder.Services.AddScoped<Ping.Services.Google.GoogleAuthService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<Ping.Services.Images.IImageService, Ping.Services.Images.ImageService>();
 
 
 // --- Health Checks ---

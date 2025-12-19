@@ -23,6 +23,7 @@ namespace Ping.Data.App
         public DbSet<ReviewTag> ReviewTags => Set<ReviewTag>();
         public DbSet<Event> Events => Set<Event>();
         public DbSet<EventAttendee> EventAttendees => Set<EventAttendee>();
+        public DbSet<EventComment> EventComments => Set<EventComment>();
         public DbSet<Favorited> Favorited => Set<Favorited>();
         public DbSet<ReviewLike> ReviewLikes => Set<ReviewLike>();
         public DbSet<Report> Reports => Set<Report>();

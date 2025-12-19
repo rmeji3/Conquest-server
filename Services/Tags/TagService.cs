@@ -8,17 +8,28 @@ namespace Ping.Services.Tags;
 
 public class TagService(AppDbContext db, ILogger<TagService> logger) : ITagService
 {
-    public async Task<IEnumerable<TagDto>> GetPopularTagsAsync(int count)
+    public async Task<IEnumerable<TagDto>> GetPopularTagsAsync(int count, int? pingId = null)
     {
         // Count usage in ReviewTags
-        var tags = await db.Tags
+        var query = db.Tags
             .AsNoTracking()
-            .Where(t => !t.IsBanned && t.IsApproved) // Only show safe tags publicly? Or maybe just not banned?
-            // Let's assume popular list should only show approved/safe tags
+            .Where(t => !t.IsBanned && t.IsApproved); // Only show safe tags publicly? Or maybe just not banned?
+
+        if (pingId.HasValue)
+        {
+            // Filter tags that are used in reviews for this Ping (via PingActivity)
+            query = query.Where(t => t.ReviewTags.Any(rt => rt.Review.PingActivity.PingId == pingId.Value));
+        }
+
+        var tags = await query
             .Select(t => new
             {
                 Tag = t,
-                Count = t.ReviewTags.Count
+                // If filtering by ping, count usage ONLY within that ping? Or global usage?
+                // "Popular tags for that specific place" implies sorting by local usage.
+                Count = pingId.HasValue 
+                    ? t.ReviewTags.Count(rt => rt.Review.PingActivity.PingId == pingId.Value) 
+                    : t.ReviewTags.Count
             })
             .OrderByDescending(x => x.Count)
             .Take(count)

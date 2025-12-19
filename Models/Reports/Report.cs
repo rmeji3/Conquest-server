@@ -8,7 +8,9 @@ namespace Ping.Models.Reports
         PingActivity,
         Review,
         Profile,
-        Bug
+        Bug,
+        Event,
+        EventComment
     }
 
     public enum ReportStatus

@@ -28,15 +28,15 @@ namespace Ping.Services.Blocks
             authDb.UserBlocks.Add(block);
             await authDb.SaveChangesAsync();
 
-            // Remove Friendship if exists (Bidirectional check)
-            var friendships = await authDb.Friendships
-                .Where(f => (f.UserId == blockerId && f.FriendId == blockedId) || 
-                            (f.UserId == blockedId && f.FriendId == blockerId))
+            // Remove Follows if exists (Bidirectional check)
+            var follows = await authDb.Follows
+                .Where(f => (f.FollowerId == blockerId && f.FolloweeId == blockedId) || 
+                            (f.FollowerId == blockedId && f.FolloweeId == blockerId))
                 .ToListAsync();
 
-            if (friendships.Any())
+            if (follows.Any())
             {
-                authDb.Friendships.RemoveRange(friendships);
+                authDb.Follows.RemoveRange(follows);
                 await authDb.SaveChangesAsync();
             }
         }
