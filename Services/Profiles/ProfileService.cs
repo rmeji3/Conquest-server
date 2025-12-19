@@ -623,7 +623,7 @@ public class ProfileService(
         return new PaginatedResult<PingDetailsDto>(pingDtos, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 
-    public async Task<PaginatedResult<EventDto>> GetUserEventsAsync(string targetUserId, string currentUserId, PaginationParams pagination)
+    public async Task<PaginatedResult<EventDto>> GetUserEventsAsync(string targetUserId, string currentUserId, PaginationParams pagination, string? sortBy = null, string? sortOrder = null)
     {
         var user = await userManager.FindByIdAsync(targetUserId);
         if (user is null) throw new KeyNotFoundException("User not found.");
@@ -637,12 +637,6 @@ public class ProfileService(
 
         var isSelf = targetUserId == currentUserId;
         
-        // No specific "EventsPrivacy" setting on User model yet (only Reviews, Places, Likes).
-        // Assuming Events are public if the Event itself is Public, or if we share commonality?
-        // Usually Profiles imply "Things I'm doing". 
-        // If I am not friend, should I see their events? 
-        // Let's assume yes, filtered by Event Visibility (Public events are visible).
-
         // Created Events
         var createdQuery = appDb.Events.AsNoTracking()
             .Where(e => e.CreatedById == targetUserId);
@@ -655,28 +649,23 @@ public class ProfileService(
         var combinedQuery = createdQuery.Union(attendingQuery);
 
         // Visibility Filter
-        // 1. Public events -> Visible
-        // 2. I created the event -> Visible
-        // 3. I am attending the event -> Visible
-        // 4. (Optional) Friend of creator? 
-        // For now: Only Public or Involved.
         combinedQuery = combinedQuery.Where(e => 
             e.IsPublic || 
             e.CreatedById == currentUserId || 
             e.Attendees.Any(a => a.UserId == currentUserId)
         );
 
-        // Only Upcoming? Or Past too?
-        // "Events" tab usually shows upcoming first. user might want history.
-        // Let's default to All, Ordered by StartTime. 
-        // Or if the user explicit asked for "Profile with... load as I scroll", probably wants future then past?
-        // Standard: Descending StartTime (Newest/Future first) or Ascending from Now?
-        // Let's sort by StartTime Descending (Show latest/future first).
-        
         var totalCount = await combinedQuery.CountAsync();
 
-        var pagedEvents = await combinedQuery
-            .OrderByDescending(e => e.StartTime)
+        // Default Sort: StartTime Descending
+        bool isAscending = sortOrder?.Equals("Asc", StringComparison.OrdinalIgnoreCase) ?? false;
+        
+        // Currently only "Time" (StartTime) is supported for events sorting as per requirement
+        var sortedQuery = isAscending 
+            ? combinedQuery.OrderBy(e => e.StartTime) 
+            : combinedQuery.OrderByDescending(e => e.StartTime);
+
+        var pagedEvents = await sortedQuery
             .Skip((pagination.PageNumber - 1) * pagination.PageSize)
             .Take(pagination.PageSize)
             .Include(e => e.Attendees) // Need attendees for mapping

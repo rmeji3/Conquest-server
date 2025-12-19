@@ -158,7 +158,7 @@ namespace Ping.Controllers.Profiles
 
         // GET /api/profiles/{id}/events?pageNumber=1&pageSize=10
         [HttpGet("{id}/events")]
-        public async Task<ActionResult<PaginatedResult<EventDto>>> GetUserEvents(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<PaginatedResult<EventDto>>> GetUserEvents(string id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? sortBy = null, [FromQuery] string? sortOrder = null)
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (currentUserId is null) return Unauthorized();
@@ -167,7 +167,7 @@ namespace Ping.Controllers.Profiles
             {
                 // Privacy check is inside the service method
                 var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
-                var events = await profileService.GetUserEventsAsync(id, currentUserId, pagination);
+                var events = await profileService.GetUserEventsAsync(id, currentUserId, pagination, sortBy, sortOrder);
                 return Ok(events);
             }
             catch (KeyNotFoundException)
