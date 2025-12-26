@@ -72,30 +72,32 @@ public class AuthService(
 
     public async Task<AuthResponse> LoginAsync(LoginDto dto)
     {
-        var user = await users.FindByEmailAsync(dto.Email);
+        var user = await users.FindByEmailAsync(dto.UserNameOrEmail) 
+                   ?? await users.FindByNameAsync(dto.UserNameOrEmail);
+
         if (user is null)
         {
-            logger.LogWarning("Login failed: User '{Email}' not found.", dto.Email);
+            logger.LogWarning("Login failed: User '{Identifier}' not found.", dto.UserNameOrEmail);
             throw new UnauthorizedAccessException("Invalid credentials.");
         }
 
         if (user.IsBanned)
         {
-             logger.LogWarning("Login failed: User '{Email}' is banned.", dto.Email);
+             logger.LogWarning("Login failed: User '{Identifier}' is banned.", dto.UserNameOrEmail);
              var msg = string.IsNullOrWhiteSpace(user.BanReason) ? "Your account has been banned." : $"Your account has been banned: {user.BanReason}";
              throw new UnauthorizedAccessException(msg);
         }
         // comment out for testing
         if (!await users.IsEmailConfirmedAsync(user))
         {
-            logger.LogWarning("Login failed: User '{Email}' not confirmed.", dto.Email);
+            logger.LogWarning("Login failed: User '{Identifier}' not confirmed.", dto.UserNameOrEmail);
             throw new UnauthorizedAccessException("Please verify your email address.");
         }
 
         var result = await signIn.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
-            logger.LogWarning("Login failed: Invalid password for '{Email}'.", dto.Email);
+            logger.LogWarning("Login failed: Invalid password for '{Identifier}'.", dto.UserNameOrEmail);
             throw new UnauthorizedAccessException("Invalid credentials.");
         }
 

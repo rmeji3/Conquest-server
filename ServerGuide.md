@@ -248,8 +248,8 @@ Property Configuration:
 - `AddPingToCollectionDto(PingId)`
 
 ### Auth
-- `RegisterDto(Email, Password, FirstName, LastName, UserName)`
-- `LoginDto(Email, Password)`
+- [POST] /api/auth/register (Email, Password, FirstName, LastName, UserName)
+- [POST] /api/auth/login (UserNameOrEmail, Password)
 - `ForgotPasswordDto(Email)`
 - `VerifyEmailDto(Email, Code)`
 - `ResendVerificationDto(Email)`
@@ -482,7 +482,7 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | Method | Route                     | Auth | Body                | Returns           | Notes                                     |
 | ------ | ------------------------- | ---- | ------------------- | ----------------- | ----------------------------------------- |
 | POST   | /api/auth/register        | An   | `RegisterDto`       | 200 Message       | Sends verification code (Rate Limit: 5/hr) |
-| POST   | /api/auth/login           | An   | `LoginDto`          | `AuthResponse`    | Blocks if `EmailConfirmed=false`          |
+| POST   | /api/auth/login           | An   | `LoginDto`          | `AuthResponse`    | Support login via Email or Username. Blocks if `EmailConfirmed=false` |
 | POST   | /api/auth/verify-email    | An   | `VerifyEmailDto`    | `AuthResponse`    | Verifies email & Logs user in             |
 | POST   | /api/auth/verify-email/resend | An | `ResendVerificationDto` | 200 Message   | Resends code if unverified (Rate Limit: 5/hr) |
 | GET    | /api/auth/me              | A    | —                   | `UserDto`         | Uses `ClaimTypes.NameIdentifier`          |
@@ -631,6 +631,7 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 ## 10. Validation & Business Rules
 
 ### Authentication
+- Users can login using either their **Email** or their **Username**.
 - Username must be unique (case-insensitive)
 - Password flows do not leak account existence (uniform responses for missing users)
 - JWT tokens expire after configured minutes (default: 60)

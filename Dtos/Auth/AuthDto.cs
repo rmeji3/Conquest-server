@@ -19,7 +19,7 @@ namespace Ping.Dtos.Auth
     );
 
     public record LoginDto(
-        [Required, EmailAddress] string Email,
+        [Required] string UserNameOrEmail,
         [Required] string Password
     );
 
