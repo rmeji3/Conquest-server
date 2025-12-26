@@ -7,7 +7,7 @@ public class SesEmailService(IAmazonSimpleEmailService ses, IConfiguration confi
 {
     public async Task SendEmailAsync(string to, string subject, string body)
     {
-        var fromAddress = config["Email:FromAddress"] ?? "noreply@Ping-app.com";
+        var fromAddress = config["Email:FromAddress"] ?? "no-reply@ping-app.net";
 
         var sendRequest = new SendEmailRequest
         {

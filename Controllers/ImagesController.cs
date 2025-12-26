@@ -15,7 +15,7 @@ public class ImagesController(IImageService imageService) : ControllerBase
 {
     // POST /api/images?folder=events
     [HttpPost]
-    public async Task<ActionResult<ImageUploadResponse>> UploadImage([FromForm] IFormFile file, [FromQuery] string folder = "uploads")
+    public async Task<ActionResult<ImageUploadResponse>> UploadImage(IFormFile file, [FromQuery] string folder = "uploads")
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) return Unauthorized();

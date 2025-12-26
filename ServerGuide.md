@@ -771,6 +771,11 @@ dotnet ef migrations add <Name> --context Ping.Data.App.AppDbContext
 dotnet ef database update --context Ping.Data.App.AppDbContext
 ```
 
+### Database Reset
+The server supports a full database reset (useful for development/testing).
+- **On Startup**: Run `dotnet run -- --reset-db` to delete and re-create both `Auth` and `App` databases before launch.
+- **Manual**: Run `.\wipe-db.ps1` (Windows) to drop the databases using the `dotnet ef` CLI.
+
 ---
 ## 13. Conventions & Extension Points
 - Controllers use explicit route prefixes instead of `[Route("api/[controller]")]` in some cases for clarity (`ActivitiesController`: `api/activities`).

@@ -368,9 +368,18 @@ using (var scope = app.Services.CreateScope())
     if (app.Environment.EnvironmentName != "Testing")
     {
         var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        await authDb.Database.MigrateAsync();
-        
         var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // Check for --reset-db flag
+        if (args.Contains("--reset-db"))
+        {
+            Log.Warning("!!! Database Reset Requested via --reset-db !!!");
+            await authDb.Database.EnsureDeletedAsync();
+            await appDb.Database.EnsureDeletedAsync();
+            Log.Information("Databases deleted successfully.");
+        }
+
+        await authDb.Database.MigrateAsync();
         await appDb.Database.MigrateAsync();
     }
 
