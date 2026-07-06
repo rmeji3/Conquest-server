@@ -78,6 +78,9 @@ public class IntegrationTestFactory : WebApplicationFactory<Program>
             services.RemoveAll<Ping.Services.Moderation.IModerationService>();
             var mockModeration = new Moq.Mock<Ping.Services.Moderation.IModerationService>();
             mockModeration.Setup(x => x.CheckContentAsync(It.IsAny<string>())).ReturnsAsync(new Ping.Services.Moderation.ModerationResult(false, ""));
+            mockModeration.Setup(x => x.CheckContentBatchAsync(It.IsAny<IReadOnlyList<string>>()))
+                .ReturnsAsync((IReadOnlyList<string> texts) =>
+                    texts.Select(_ => new Ping.Services.Moderation.ModerationResult(false, "")).ToList());
             services.AddScoped(_ => mockModeration.Object);
 
             // Add Mock IChatCompletionService

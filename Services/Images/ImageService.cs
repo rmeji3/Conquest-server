@@ -2,6 +2,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Processing;
 using Ping.Services.Storage;
 using Microsoft.Extensions.Logging;
@@ -35,8 +36,7 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
             if (folder != "stickers")
                 throw new ArgumentException("Lottie and Shader files are only allowed for stickers.");
 
-            var assetTimestamp = DateTime.UtcNow.Ticks;
-            var assetKey = $"{folder}/{userId}/{assetTimestamp}_orig{extLower}";
+            var assetKey = $"{folder}/{userId}/{NewUploadId()}_orig{extLower}";
 
             var contentType = isLottie ? "application/json" : "text/plain";
             using var fileStream = file.OpenReadStream();
@@ -55,15 +55,21 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
         if (!allowedTypes.Contains(file.ContentType))
             throw new ArgumentException("Invalid file type. Only JPEG, PNG, WebP, GIF, HEIC, HEIF, and SVG are allowed.");
 
-        // 2. Generate Keys
-        var timestamp = DateTime.UtcNow.Ticks;
-        var originalKey = $"{folder}/{userId}/{timestamp}_orig{ext}";
-        var thumbKey = $"{folder}/{userId}/{timestamp}_thumb{ext}";
+        // 2. Generate Keys. The id includes a random component: review images are now
+        //    processed concurrently, and tick-only keys collide for uploads that start
+        //    within the same timer resolution (silently overwriting each other in S3).
+        var uploadId = NewUploadId();
+        var originalKey = $"{folder}/{userId}/{uploadId}_orig{ext}";
+        var thumbKey = $"{folder}/{userId}/{uploadId}_thumb{ext}";
 
         // 3. Decode the image so we can bake in EXIF orientation. Link unfurlers
         //    / OG-image fetchers (and other non-EXIF-aware consumers) render the
         //    raw pixels, so a photo carrying a "rotate 90°" EXIF tag shows up
         //    sideways unless we apply the rotation to the pixels here.
+        //    Re-encoding is lossy and expensive though, so it only happens when the
+        //    photo actually carries a non-upright orientation tag — the mobile app
+        //    already re-encodes to upright JPEG on-device, so review images normally
+        //    skip it and the client's bytes are uploaded untouched.
         string originalUrl;
         string thumbUrl;
         try
@@ -76,20 +82,22 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
             using var imageStream = file.OpenReadStream();
             using var image = await Image.LoadAsync(imageStream);
 
-            // Bake EXIF orientation into the pixels, then drop the now-stale tag.
-            image.Mutate(x => x.AutoOrient());
+            using var origOut = new MemoryStream();
+            Task<string> originalUpload;
+            if (NeedsOrientationFix(image))
+            {
+                // Bake EXIF orientation into the pixels, then drop the now-stale tag.
+                image.Mutate(x => x.AutoOrient());
 
-            // Upload the orientation-corrected original in its original format.
-            // Pick a high-quality encoder for the lossy formats so re-encoding
-            // doesn't degrade the photo; lossless/other formats keep their default.
-            IImageEncoder originalEncoder = format.Name switch
-            {
-                "JPEG" => new JpegEncoder { Quality = OriginalQuality },
-                "WEBP" => new WebpEncoder { Quality = OriginalQuality },
-                _ => image.Configuration.ImageFormatsManager.GetEncoder(format),
-            };
-            using (var origOut = new MemoryStream())
-            {
+                // Upload the orientation-corrected original in its original format.
+                // Pick a high-quality encoder for the lossy formats so re-encoding
+                // doesn't degrade the photo; lossless/other formats keep their default.
+                IImageEncoder originalEncoder = format.Name switch
+                {
+                    "JPEG" => new JpegEncoder { Quality = OriginalQuality },
+                    "WEBP" => new WebpEncoder { Quality = OriginalQuality },
+                    _ => image.Configuration.ImageFormatsManager.GetEncoder(format),
+                };
                 await image.SaveAsync(origOut, originalEncoder);
                 origOut.Position = 0;
                 var origFile = new FormFile(origOut, 0, origOut.Length, "file", $"original{ext}")
@@ -97,10 +105,15 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
                     Headers = new HeaderDictionary(),
                     ContentType = file.ContentType
                 };
-                originalUrl = await storageService.UploadFileAsync(origFile, originalKey);
+                originalUpload = storageService.UploadFileAsync(origFile, originalKey);
+            }
+            else
+            {
+                originalUpload = storageService.UploadFileAsync(file, originalKey);
             }
 
-            // Generate & upload the thumbnail (already upright after AutoOrient).
+            // Generate the thumbnail while the original uploads; the two S3 puts
+            // overlap instead of running back-to-back.
             if (image.Width > MaxThumbnailSize || image.Height > MaxThumbnailSize)
             {
                 image.Mutate(x => x.Resize(new ResizeOptions
@@ -121,6 +134,8 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
                 };
                 thumbUrl = await storageService.UploadFileAsync(thumbFile, Path.ChangeExtension(thumbKey, ".webp"));
             }
+
+            originalUrl = await originalUpload;
         }
         catch (UnknownImageFormatException)
         {
@@ -134,6 +149,21 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
         logger.LogInformation("Uploaded image {OriginalKey} and thumbnail {ThumbKey}", originalKey, thumbKey);
 
         return (originalUrl, thumbUrl);
+    }
+
+    /// <summary>
+    /// Storage-key id: ticks keep keys chronologically sortable, the GUID segment keeps
+    /// them unique when several uploads for the same user start in the same tick.
+    /// </summary>
+    private static string NewUploadId() => $"{DateTime.UtcNow.Ticks}_{Guid.NewGuid():N}";
+
+    /// <summary>True when the image carries an EXIF orientation tag other than upright.</summary>
+    private static bool NeedsOrientationFix(Image image)
+    {
+        var exif = image.Metadata.ExifProfile;
+        if (exif is null) return false;
+        if (!exif.TryGetValue(ExifTag.Orientation, out var orientation) || orientation is null) return false;
+        return orientation.Value != 1; // 1 = TopLeft (already upright)
     }
 
     public async Task<string> GenerateThumbnailFromUrlAsync(string imageUrl, string folder, string userId)

@@ -25,6 +25,7 @@ public class ReviewService(
     Ping.Services.Moderation.IModerationService moderationService,
     IBlockService blockService,
     INotificationService notificationService,
+    IServiceScopeFactory scopeFactory,
     ILogger<ReviewService> logger) : IReviewService
 {
     public async Task<ReviewDto> CreateReviewAsync(int pingActivityId, CreateReviewDto dto, string userId, string userName)
@@ -55,14 +56,42 @@ public class ReviewService(
             throw new ArgumentException("Content must be at most 1000 characters.");
         }
 
-        // Moderation Check for Content
-        if (!string.IsNullOrWhiteSpace(dto.Content))
+        var distinctTags = (dto.Tags ?? new List<string>())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        // Existing tags in one query; only genuinely new tag names need moderation.
+        var existingTags = distinctTags.Count > 0
+            ? await appDb.Tags.Where(t => distinctTags.Contains(t.Name)).ToListAsync()
+            : new List<Tag>();
+        var tagsByName = existingTags.ToDictionary(t => t.Name);
+        var newTagNames = distinctTags.Where(n => !tagsByName.ContainsKey(n)).ToList();
+
+        // Moderate the content and all new tags in a single API round trip; each
+        // sequential moderation call used to add a few hundred ms to review creation.
+        // Index 0 is the content, the rest align with newTagNames.
+        var flaggedTagNames = new HashSet<string>();
+        if (!string.IsNullOrWhiteSpace(dto.Content) || newTagNames.Count > 0)
         {
-            var modResult = await moderationService.CheckContentAsync(dto.Content);
-            if (modResult.IsFlagged)
+            var moderationInputs = new List<string> { dto.Content ?? string.Empty };
+            moderationInputs.AddRange(newTagNames);
+            var modResults = await moderationService.CheckContentBatchAsync(moderationInputs);
+
+            if (modResults[0].IsFlagged)
             {
-                logger.LogWarning("Review content flagged: {Reason}", modResult.Reason);
-                throw new ArgumentException($"Content rejected: {modResult.Reason}");
+                logger.LogWarning("Review content flagged: {Reason}", modResults[0].Reason);
+                throw new ArgumentException($"Content rejected: {modResults[0].Reason}");
+            }
+
+            for (var i = 0; i < newTagNames.Count; i++)
+            {
+                if (modResults[i + 1].IsFlagged)
+                {
+                    logger.LogWarning("Tag creation flagged: {TagName} - {Reason}", newTagNames[i], modResults[i + 1].Reason);
+                    flaggedTagNames.Add(newTagNames[i]); // Skip this bad tag, don't block entire review
+                }
             }
         }
 
@@ -81,35 +110,18 @@ public class ReviewService(
             Likes = 0,
         };
 
-        // Handle Tags
-        if (dto.Tags != null && dto.Tags.Count > 0)
+        foreach (var tagName in distinctTags)
         {
-            var distinctTags = dto.Tags
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .Select(t => t.Trim().ToLowerInvariant())
-                .Distinct()
-                .ToList();
+            if (flaggedTagNames.Contains(tagName)) continue;
 
-            foreach (var tagName in distinctTags)
+            if (!tagsByName.TryGetValue(tagName, out var tag))
             {
-                // Find or create tag
-                var tag = await appDb.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
-                if (tag == null)
-                {
-                    // Moderate new tag name
-                    var tagMod = await moderationService.CheckContentAsync(tagName);
-                    if (tagMod.IsFlagged)
-                    {
-                        logger.LogWarning("Tag creation flagged: {TagName} - {Reason}", tagName, tagMod.Reason);
-                        continue; // Skip this bad tag, don't block entire review
-                    }
-
-                    tag = new Tag { Name = tagName };
-                    appDb.Tags.Add(tag);
-                }
-
-                review.ReviewTags.Add(new ReviewTag { Tag = tag });
+                tag = new Tag { Name = tagName };
+                appDb.Tags.Add(tag);
+                tagsByName[tagName] = tag;
             }
+
+            review.ReviewTags.Add(new ReviewTag { Tag = tag });
         }
 
         appDb.Reviews.Add(review);
@@ -123,10 +135,13 @@ public class ReviewService(
             .Select(pa => new { pa.Ping.OwnerUserId, pa.Ping.Name, pa.Ping.IsDeleted })
             .FirstOrDefaultAsync();
 
-        // Notify Ping Owner
+        // Notify Ping Owner. Fire-and-forget: the push involves DB lookups plus an
+        // external push-API call, and the reviewer shouldn't wait on someone else's
+        // notification. A fresh DI scope is required because the request's scoped
+        // DbContext is disposed as soon as the response returns.
         if (pingInfo != null && !string.IsNullOrEmpty(pingInfo.OwnerUserId) && pingInfo.OwnerUserId != userId)
         {
-             await notificationService.SendNotificationAsync(new Notification
+            var notification = new Notification
             {
                 UserId = pingInfo.OwnerUserId,
                 SenderId = userId,
@@ -137,6 +152,20 @@ public class ReviewService(
                 Message = $"{userName} reviewed {pingInfo.Name}.",
                 ReferenceId = review.Id.ToString(),
                 ImageThumbnailUrl = review.ThumbnailUrl ?? review.ImageUrl
+            };
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var notifier = scope.ServiceProvider.GetRequiredService<INotificationService>();
+                    await notifier.SendNotificationAsync(notification);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send new-review notification for review {ReviewId}", review.Id);
+                }
             });
         }
 
@@ -346,20 +375,22 @@ public class ReviewService(
                                      r.PingActivity.Ping.Location.X >= minLon && r.PingActivity.Ping.Location.X <= maxLon);
         }
 
+        int count;
+        List<Review> reviews;
+
         if (scope == "friends")
         {
             query = query.OrderByDescending(r => r.CreatedAt);
+            count = await query.CountAsync();
+            reviews = await query
+                .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
+                .ToListAsync();
         }
         else
         {
-            query = query.OrderByDescending(r => r.Likes);
+            (reviews, count) = await RankGlobalFeedAsync(query, filter, pagination);
         }
-
-        var count = await query.CountAsync();
-        var reviews = await query
-            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
-            .Take(pagination.PageSize)
-            .ToListAsync();
 
         var reviewIds = reviews.Select(r => r.Id).ToList();
         var likedReviewIds = new HashSet<int>();
@@ -413,6 +444,63 @@ public class ReviewService(
             pagination.PageNumber, pagination.PageSize, count);
 
         return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
+    }
+
+    // Candidate pool sizes for the ranked global feed. Two pools so both all-time
+    // favourites and brand-new reviews are eligible; the union (deduped) is what the
+    // ranker orders, and it also becomes the feed's effective depth (~300 items).
+    private const int LikedPoolSize = 200;
+    private const int FreshPoolSize = 100;
+
+    /// <summary>
+    /// Ranked global feed: fetches a bounded candidate pool, scores it in memory via
+    /// ExploreFeedRanker (hot score x proximity), and slices the requested page.
+    /// Scoring is in-memory (not SQL) because prod runs Postgres and tests run SQLite,
+    /// and score math doesn't translate reliably on both. TotalCount is the pool size,
+    /// not the full table count, so infinite scroll ends when the ranked feed does.
+    /// </summary>
+    private async Task<(List<Review> Reviews, int Count)> RankGlobalFeedAsync(
+        IQueryable<Review> query, ExploreReviewsFilterDto filter, PaginationParams pagination)
+    {
+        var likedPool = await query
+            .OrderByDescending(r => r.Likes)
+            .ThenByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .Take(LikedPoolSize)
+            .ToListAsync();
+
+        var freshPool = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .Take(FreshPoolSize)
+            .ToListAsync();
+
+        var poolById = new Dictionary<int, Review>(LikedPoolSize + FreshPoolSize);
+        foreach (var r in likedPool.Concat(freshPool)) poolById.TryAdd(r.Id, r);
+
+        // AsOf is fixed by the client per refresh so every page ranks against the same
+        // clock and offset pagination stays stable while the user scrolls.
+        var asOf = filter.AsOf?.UtcDateTime ?? DateTime.UtcNow;
+
+        var candidates = poolById.Values
+            .Select(r => new ExploreFeedRanker.Candidate(
+                r.Id,
+                r.PingActivity.PingId,
+                r.Likes,
+                r.CreatedAt,
+                r.PingActivity.Ping.Latitude,
+                r.PingActivity.Ping.Longitude))
+            .ToList();
+
+        var ranked = ExploreFeedRanker.Rank(candidates, asOf, filter.Latitude, filter.Longitude);
+
+        var pageItems = ranked
+            .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
+            .Select(c => poolById[c.Id])
+            .ToList();
+
+        return (pageItems, ranked.Count);
     }
 
     public async Task LikeReviewAsync(int reviewId, string userId)

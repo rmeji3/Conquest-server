@@ -13,19 +13,37 @@ public class OpenAIModerationService(HttpClient http, IConfiguration config, ILo
 
     public async Task<ModerationResult> CheckContentAsync(string text)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return new ModerationResult(false, null);
+        var results = await CheckContentBatchAsync([text]);
+        return results[0];
+    }
+
+    public async Task<IReadOnlyList<ModerationResult>> CheckContentBatchAsync(IReadOnlyList<string> texts)
+    {
+        // The moderation endpoint takes an array input and returns positionally
+        // aligned results, so N texts (review content + new tags) cost one round
+        // trip instead of N. Blank entries are never sent; they pass trivially.
+        var results = new ModerationResult[texts.Count];
+        for (var i = 0; i < texts.Count; i++)
+            results[i] = new ModerationResult(false, null);
+
+        var sendIndexes = new List<int>();
+        for (var i = 0; i < texts.Count; i++)
+            if (!string.IsNullOrWhiteSpace(texts[i]))
+                sendIndexes.Add(i);
+
+        if (sendIndexes.Count == 0)
+            return results;
 
         var apiKey = config["OpenAI:ApiKey"] ?? config["OPENAI_API_KEY"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
         if (string.IsNullOrEmpty(apiKey))
         {
             logger.LogWarning("OPENAI_API_KEY is missing. Moderation failing open.");
-            return new ModerationResult(false, null);
+            return results;
         }
 
         try
         {
-            var requestBody = new { input = text };
+            var requestBody = new { input = sendIndexes.Select(i => texts[i]).ToList() };
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -34,43 +52,49 @@ public class OpenAIModerationService(HttpClient http, IConfiguration config, ILo
             request.Content = content;
 
             var response = await http.SendAsync(request);
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
                 logger.LogError("Moderation API failed: {StatusCode} - {Body}", response.StatusCode, errorBody);
-                return new ModerationResult(false, null); // Fail open on API error
+                return results; // Fail open on API error
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<ModerationResponse>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (result?.Results != null && result.Results.Count > 0)
+            if (result?.Results != null)
             {
-                var first = result.Results[0];
-                if (first.Flagged)
+                for (var n = 0; n < sendIndexes.Count && n < result.Results.Count; n++)
                 {
-                    // Find triggered categories
-                    var reasons = new List<string>();
-                    foreach (var prop in typeof(Categories).GetProperties())
+                    var item = result.Results[n];
+                    if (item.Flagged)
                     {
-                        if (prop.PropertyType == typeof(bool) && (bool)prop.GetValue(first.Categories)!)
-                        {
-                            reasons.Add(prop.Name);
-                        }
+                        results[sendIndexes[n]] = new ModerationResult(true, DescribeFlaggedCategories(item.Categories));
                     }
-                    var reasonStr = reasons.Count > 0 ? string.Join(", ", reasons) : "Content violation";
-                    return new ModerationResult(true, reasonStr);
                 }
             }
 
-            return new ModerationResult(false, null);
+            return results;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Moderation service exception");
-            return new ModerationResult(false, null); // Fail open
+            return results; // Fail open
         }
+    }
+
+    private static string DescribeFlaggedCategories(Categories categories)
+    {
+        var reasons = new List<string>();
+        foreach (var prop in typeof(Categories).GetProperties())
+        {
+            if (prop.PropertyType == typeof(bool) && (bool)prop.GetValue(categories)!)
+            {
+                reasons.Add(prop.Name);
+            }
+        }
+        return reasons.Count > 0 ? string.Join(", ", reasons) : "Content violation";
     }
 
     public async Task<ModerationResult> CheckImageAsync(string base64Image)

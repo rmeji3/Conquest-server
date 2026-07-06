@@ -80,9 +80,15 @@ public record ExploreReviewDto(
 
 public class ExploreReviewsFilterDto
 {
+    // Latitude/Longitude alone anchor the global feed's proximity-decay ranking;
+    // adding RadiusKm additionally turns them into a hard bounding-box filter.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public double? RadiusKm { get; set; }
+
+    // Fixed by the client per feed refresh so ranking scores don't drift between
+    // page fetches (offset pagination would duplicate/skip items otherwise).
+    public DateTimeOffset? AsOf { get; set; }
     public string? SearchQuery { get; set; }
     public List<string>? Tags { get; set; }
     public List<int>? PingGenreIds { get; set; }

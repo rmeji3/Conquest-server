@@ -64,23 +64,19 @@ namespace Ping.Controllers.Reviews
             if (request.Images != null) allImagesToProcess.AddRange(request.Images);
             allImagesToProcess = allImagesToProcess.Take(6).ToList();
 
-            // Handle Image Upload
+            // Handle Image Upload. Processed concurrently: each image is an independent
+            // decode + S3 upload, and doing them one-by-one made multi-photo reviews
+            // take several seconds. Task.WhenAll preserves input order, so the first
+            // image stays the cover.
             if (allImagesToProcess.Any())
             {
-                try 
+                try
                 {
-                    bool isFirst = true;
-                    foreach(var imgFile in allImagesToProcess)
-                    {
-                        var (original, thumb) = await imageService.ProcessAndUploadImageAsync(imgFile, "reviews", userId);
-                        if (isFirst) {
-                            imageUrl = original;
-                            thumbnailUrl = thumb;
-                            isFirst = false;
-                        } else {
-                            additionalImages.Add(original);
-                        }
-                    }
+                    var processed = await Task.WhenAll(
+                        allImagesToProcess.Select(f => imageService.ProcessAndUploadImageAsync(f, "reviews", userId)));
+
+                    (imageUrl, thumbnailUrl) = processed[0];
+                    additionalImages.AddRange(processed.Skip(1).Select(p => p.OriginalUrl));
                 }
                 catch (Exception ex)
                 {
