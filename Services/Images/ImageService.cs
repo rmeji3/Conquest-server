@@ -11,7 +11,12 @@ namespace Ping.Services.Images;
 
 public class ImageService(IStorageService storageService, HttpClient httpClient, ILogger<ImageService> logger) : IImageService
 {
-    private const int MaxThumbnailSize = 500;
+    // Sized for the explore feed's 2-column masonry: cards are ~180pt wide, which is
+    // ~540 physical px on 3x devices. The cap applies to the LONG edge, so portrait
+    // photos need headroom for their short edge to still cover the card — 500 left
+    // portraits at ~375px wide and they rendered visibly upscaled/blurry.
+    private const int MaxThumbnailSize = 800;
+    private const int ThumbnailQuality = 80; // ImageSharp's default 75 is visibly soft
     private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
 
     // We must re-encode the original to bake in EXIF orientation, which is
@@ -125,7 +130,7 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
 
             using (var outStream = new MemoryStream())
             {
-                await image.SaveAsWebpAsync(outStream);
+                await image.SaveAsWebpAsync(outStream, new WebpEncoder { Quality = ThumbnailQuality });
                 outStream.Position = 0;
                 var thumbFile = new FormFile(outStream, 0, outStream.Length, "file", $"thumbnail.webp")
                 {
@@ -189,10 +194,10 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
             }
 
             using var outStream = new MemoryStream();
-            await image.SaveAsWebpAsync(outStream);
+            await image.SaveAsWebpAsync(outStream, new WebpEncoder { Quality = ThumbnailQuality });
             outStream.Position = 0;
 
-            var thumbKey = $"{folder}/{userId}/{DateTime.UtcNow.Ticks}_thumb.webp";
+            var thumbKey = $"{folder}/{userId}/{NewUploadId()}_thumb.webp";
             var thumbFile = new FormFile(outStream, 0, outStream.Length, "file", "thumbnail.webp")
             {
                 Headers = new HeaderDictionary(),

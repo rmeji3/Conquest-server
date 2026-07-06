@@ -16,6 +16,7 @@ public interface IReviewService
     Task<PaginatedResult<ExploreReviewDto>> GetMyReviewsAsync(string userId, PaginationParams pagination);
     Task<PaginatedResult<ExploreReviewDto>> GetFriendsFeedAsync(string userId, PaginationParams pagination);
     Task DeleteReviewAsAdminAsync(int id);
+    Task<ReviewThumbnailBackfillResult> RegenerateReviewThumbnailsAsync(int afterId, int batchSize);
     Task DeleteReviewAsync(int reviewId, string userId);
     Task<ReviewDto> UpdateReviewAsync(int reviewId, string userId, UpdateReviewDto dto);
     Task<ExploreReviewDto> GetReviewByIdAsync(int reviewId, string? userId);

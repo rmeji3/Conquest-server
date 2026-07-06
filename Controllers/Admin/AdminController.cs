@@ -97,6 +97,18 @@ namespace Ping.Controllers
             return Ok(new { message = $"Review {id} deleted." });
         }
 
+        // Regenerates review thumbnails from stored originals at the current
+        // size/quality settings. Batched: call repeatedly, passing the returned
+        // lastId as afterId, until remaining reaches 0.
+        [HttpPost("reviews/regenerate-thumbnails")]
+        public async Task<IActionResult> RegenerateReviewThumbnails(
+            [FromQuery] int afterId = 0,
+            [FromQuery] int batchSize = 25)
+        {
+            var result = await reviewService.RegenerateReviewThumbnailsAsync(afterId, batchSize);
+            return Ok(result);
+        }
+
         [HttpDelete("events/{id}")]
         public async Task<IActionResult> DeleteEvent(int id)
         {

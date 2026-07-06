@@ -78,6 +78,9 @@ public record ExploreReviewDto(
     List<string>? AdditionalImageUrls = null
 );
 
+/// <summary>Progress report for one batch of the admin thumbnail backfill.</summary>
+public record ReviewThumbnailBackfillResult(int Processed, int Updated, int Failed, int LastId, int Remaining);
+
 public class ExploreReviewsFilterDto
 {
     // Latitude/Longitude alone anchor the global feed's proximity-decay ranking;

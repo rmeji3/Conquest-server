@@ -26,6 +26,7 @@ public class ReviewService(
     IBlockService blockService,
     INotificationService notificationService,
     IServiceScopeFactory scopeFactory,
+    Ping.Services.Images.IImageService imageService,
     ILogger<ReviewService> logger) : IReviewService
 {
     public async Task<ReviewDto> CreateReviewAsync(int pingActivityId, CreateReviewDto dto, string userId, string userName)
@@ -970,10 +971,68 @@ public class ReviewService(
         }
     }
 
+    /// <summary>
+    /// One batch of the admin thumbnail backfill: regenerates each review's thumbnail
+    /// from its stored original (picking up the current size/quality settings) and
+    /// updates ThumbnailUrl. Cursored by review id so the caller drives progress with
+    /// repeated requests instead of one long-running one. Reviews whose "image" is the
+    /// no-photo placeholder are skipped. Old thumbnail objects are left in S3.
+    /// </summary>
+    public async Task<ReviewThumbnailBackfillResult> RegenerateReviewThumbnailsAsync(int afterId, int batchSize)
+    {
+        batchSize = Math.Clamp(batchSize, 1, 100);
+
+        var reviews = await appDb.Reviews
+            .Where(r => r.Id > afterId
+                        && r.ImageUrl != ""
+                        && !r.ImageUrl.Contains("/placeholders/")
+                        && !r.ImageUrl.Contains("placehold.co"))
+            .OrderBy(r => r.Id)
+            .Take(batchSize)
+            .ToListAsync();
+
+        if (reviews.Count == 0)
+        {
+            return new ReviewThumbnailBackfillResult(0, 0, 0, afterId, 0);
+        }
+
+        // The regeneration itself is HTTP + S3 only (no DbContext), so the batch can
+        // run concurrently; entity updates happen afterwards on this thread.
+        var regenerated = await Task.WhenAll(reviews.Select(async r =>
+        {
+            // On failure GenerateThumbnailFromUrlAsync returns the original URL as the
+            // fallback; treat that as "failed" and keep the existing thumbnail instead.
+            var thumb = await imageService.GenerateThumbnailFromUrlAsync(r.ImageUrl, "reviews", r.UserId);
+            return thumb != r.ImageUrl ? thumb : null;
+        }));
+
+        var updated = 0;
+        for (var i = 0; i < reviews.Count; i++)
+        {
+            if (regenerated[i] is null) continue;
+            reviews[i].ThumbnailUrl = regenerated[i]!;
+            updated++;
+        }
+
+        await appDb.SaveChangesAsync();
+
+        var lastId = reviews[^1].Id;
+        var remaining = await appDb.Reviews.CountAsync(r => r.Id > lastId
+            && r.ImageUrl != ""
+            && !r.ImageUrl.Contains("/placeholders/")
+            && !r.ImageUrl.Contains("placehold.co"));
+
+        logger.LogInformation(
+            "Thumbnail backfill batch: {Updated}/{Processed} updated after id {AfterId}, {Remaining} remaining",
+            updated, reviews.Count, afterId, remaining);
+
+        return new ReviewThumbnailBackfillResult(reviews.Count, updated, reviews.Count - updated, lastId, remaining);
+    }
+
     public async Task DeleteReviewAsync(int reviewId, string userId)
     {
         var review = await appDb.Reviews.FindAsync(reviewId);
-        
+
         if (review == null)
         {
             throw new KeyNotFoundException("Review not found.");
