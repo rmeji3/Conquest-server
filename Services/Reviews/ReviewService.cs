@@ -996,15 +996,25 @@ public class ReviewService(
             return new ReviewThumbnailBackfillResult(0, 0, 0, afterId, 0);
         }
 
-        // The regeneration itself is HTTP + S3 only (no DbContext), so the batch can
-        // run concurrently; entity updates happen afterwards on this thread.
-        var regenerated = await Task.WhenAll(reviews.Select(async r =>
+        // Regeneration is decode-heavy: each original is a multi-MB download whose
+        // decoded bitmap is ~50MB. Running the whole batch concurrently starved the
+        // 1-vCPU/512MB prod container (thread-pool exhaustion -> Redis timeouts,
+        // failed health checks, container death), so process in small waves instead.
+        // The waves only touch HTTP + S3 (no DbContext); entity updates happen
+        // afterwards on this thread.
+        const int regenConcurrency = 2;
+        var regenerated = new string?[reviews.Count];
+        foreach (var wave in Enumerable.Range(0, reviews.Count).Chunk(regenConcurrency))
         {
-            // On failure GenerateThumbnailFromUrlAsync returns the original URL as the
-            // fallback; treat that as "failed" and keep the existing thumbnail instead.
-            var thumb = await imageService.GenerateThumbnailFromUrlAsync(r.ImageUrl, "reviews", r.UserId);
-            return thumb != r.ImageUrl ? thumb : null;
-        }));
+            await Task.WhenAll(wave.Select(async i =>
+            {
+                // On failure GenerateThumbnailFromUrlAsync returns the original URL as
+                // the fallback; treat that as "failed" and keep the existing thumbnail.
+                var r = reviews[i];
+                var thumb = await imageService.GenerateThumbnailFromUrlAsync(r.ImageUrl, "reviews", r.UserId);
+                regenerated[i] = thumb != r.ImageUrl ? thumb : null;
+            }));
+        }
 
         var updated = 0;
         for (var i = 0; i < reviews.Count; i++)
