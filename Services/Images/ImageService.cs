@@ -144,11 +144,30 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
         }
         catch (UnknownImageFormatException)
         {
-            // For formats ImageSharp can't decode (e.g. HEIC), upload the raw
-            // original and reuse it as its own thumbnail.
+            // For formats ImageSharp can't decode (mainly HEIC), upload the raw
+            // original as-is and fall back to Magick.NET for the thumbnail. Only if
+            // that also fails does the original serve as its own thumbnail.
             originalUrl = await storageService.UploadFileAsync(file, originalKey);
-            thumbUrl = originalUrl;
-            logger.LogInformation("Unsupported image format for processing, using raw original as thumbnail");
+            try
+            {
+                using var raw = new MemoryStream();
+                using (var rawStream = file.OpenReadStream())
+                    await rawStream.CopyToAsync(raw);
+
+                using var webpOut = EncodeWebpThumbnailWithMagick(raw.ToArray());
+                var thumbFile = new FormFile(webpOut, 0, webpOut.Length, "file", "thumbnail.webp")
+                {
+                    Headers = new HeaderDictionary(),
+                    ContentType = "image/webp"
+                };
+                thumbUrl = await storageService.UploadFileAsync(thumbFile, Path.ChangeExtension(thumbKey, ".webp"));
+                logger.LogInformation("Generated thumbnail via Magick.NET for ImageSharp-unsupported format {Extension}", ext);
+            }
+            catch (Exception ex)
+            {
+                thumbUrl = originalUrl;
+                logger.LogWarning(ex, "Unsupported image format for processing, using raw original as thumbnail");
+            }
         }
 
         logger.LogInformation("Uploaded image {OriginalKey} and thumbnail {ThumbKey}", originalKey, thumbKey);
@@ -161,6 +180,29 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
     /// them unique when several uploads for the same user start in the same tick.
     /// </summary>
     private static string NewUploadId() => $"{DateTime.UtcNow.Ticks}_{Guid.NewGuid():N}";
+
+    /// <summary>
+    /// Thumbnail fallback for formats ImageSharp can't decode (mainly iPhone HEIC).
+    /// Magick.NET ships libheif, so it can read them; output matches the primary
+    /// pipeline (upright, max-edge-capped WebP at ThumbnailQuality).
+    /// </summary>
+    private static MemoryStream EncodeWebpThumbnailWithMagick(byte[] sourceBytes)
+    {
+        using var magick = new ImageMagick.MagickImage(sourceBytes);
+        magick.AutoOrient();
+        if (magick.Width > MaxThumbnailSize || magick.Height > MaxThumbnailSize)
+        {
+            // MagickGeometry shrinks to fit the box while preserving aspect ratio.
+            magick.Resize(new ImageMagick.MagickGeometry(MaxThumbnailSize, MaxThumbnailSize));
+        }
+        magick.Quality = ThumbnailQuality;
+        magick.Format = ImageMagick.MagickFormat.WebP;
+
+        var outStream = new MemoryStream();
+        magick.Write(outStream);
+        outStream.Position = 0;
+        return outStream;
+    }
 
     /// <summary>True when the image carries an EXIF orientation tag other than upright.</summary>
     private static bool NeedsOrientationFix(Image image)
@@ -178,23 +220,34 @@ public class ImageService(IStorageService storageService, HttpClient httpClient,
             using var response = await httpClient.GetAsync(imageUrl);
             response.EnsureSuccessStatusCode();
 
-            await using var sourceStream = await response.Content.ReadAsStreamAsync();
-            using var image = await Image.LoadAsync(sourceStream);
-
-            // Bake in EXIF orientation so the thumbnail is always upright.
-            image.Mutate(x => x.AutoOrient());
-
-            if (image.Width > MaxThumbnailSize || image.Height > MaxThumbnailSize)
-            {
-                image.Mutate(x => x.Resize(new ResizeOptions
-                {
-                    Mode = ResizeMode.Max,
-                    Size = new Size(MaxThumbnailSize, MaxThumbnailSize)
-                }));
-            }
+            // Buffered so a failed ImageSharp decode can retry with Magick.NET —
+            // legacy originals include HEIC, which ImageSharp has no decoder for.
+            var sourceBytes = await response.Content.ReadAsByteArrayAsync();
 
             using var outStream = new MemoryStream();
-            await image.SaveAsWebpAsync(outStream, new WebpEncoder { Quality = ThumbnailQuality });
+            try
+            {
+                using var image = await Image.LoadAsync(new MemoryStream(sourceBytes));
+
+                // Bake in EXIF orientation so the thumbnail is always upright.
+                image.Mutate(x => x.AutoOrient());
+
+                if (image.Width > MaxThumbnailSize || image.Height > MaxThumbnailSize)
+                {
+                    image.Mutate(x => x.Resize(new ResizeOptions
+                    {
+                        Mode = ResizeMode.Max,
+                        Size = new Size(MaxThumbnailSize, MaxThumbnailSize)
+                    }));
+                }
+
+                await image.SaveAsWebpAsync(outStream, new WebpEncoder { Quality = ThumbnailQuality });
+            }
+            catch (UnknownImageFormatException)
+            {
+                using var magickOut = EncodeWebpThumbnailWithMagick(sourceBytes);
+                await magickOut.CopyToAsync(outStream);
+            }
             outStream.Position = 0;
 
             var thumbKey = $"{folder}/{userId}/{NewUploadId()}_thumb.webp";

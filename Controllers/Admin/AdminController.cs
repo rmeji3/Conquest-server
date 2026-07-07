@@ -49,7 +49,7 @@ namespace Ping.Controllers
         Ping.Services.Admin.IDbJanitorService janitorService,
         AuthDbContext authDbContext,
         Ping.Services.Admin.IAnnouncementService announcementService,
-        INotificationService notificationService,
+        IServiceScopeFactory scopeFactory,
         ILogger<AdminController> logger
         ) : ControllerBase
     {
@@ -562,49 +562,62 @@ namespace Ping.Controllers
 
             if (!string.IsNullOrWhiteSpace(request.Message))
             {
-                // Dispatch as a non-blocking background task to prevent HTTP timeouts and memory spikes
+                var message = request.Message;
+
+                // Dispatch as a non-blocking background task to prevent HTTP timeouts and
+                // memory spikes. Everything inside runs on fresh DI scopes: the request's
+                // scoped services are disposed the moment this response returns, and using
+                // them here silently killed the whole fan-out with an
+                // ObjectDisposedException on the first batch.
                 _ = Task.Run(async () =>
                 {
-                    int pageSize = 500;
-                    int page = 0;
-                    bool hasMore = true;
+                    const int pageSize = 500;
+                    // Concurrent sends per wave; each needs its own scope because a scoped
+                    // DbContext only supports one operation at a time.
+                    const int sendConcurrency = 15;
+                    var page = 0;
 
-                    while (hasMore)
+                    using var pagingScope = scopeFactory.CreateScope();
+                    var users = pagingScope.ServiceProvider
+                        .GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+
+                    while (true)
                     {
                         try
                         {
                             // Query user IDs in batches of 500
-                            var batchUserIds = await userManager.Users
+                            var batchUserIds = await users.Users
                                 .OrderBy(u => u.Id)
                                 .Skip(page * pageSize)
                                 .Take(pageSize)
                                 .Select(u => u.Id)
                                 .ToListAsync();
 
-                            if (batchUserIds.Count == 0)
-                            {
-                                hasMore = false;
-                                break;
-                            }
+                            if (batchUserIds.Count == 0) break;
 
-                            foreach (var userId in batchUserIds)
+                            foreach (var wave in batchUserIds.Chunk(sendConcurrency))
                             {
-                                try
+                                await Task.WhenAll(wave.Select(async userId =>
                                 {
-                                    await notificationService.SendNotificationAsync(new Notification
+                                    try
                                     {
-                                        UserId = userId,
-                                        Type = NotificationType.System,
-                                        Title = "New Announcement",
-                                        Message = request.Message,
-                                        ReferenceId = null,
-                                        ImageThumbnailUrl = null
-                                    });
-                                }
-                                catch (Exception ex)
-                                {
-                                    logger.LogError(ex, "Failed to send announcement notification to user {UserId}", userId);
-                                }
+                                        using var sendScope = scopeFactory.CreateScope();
+                                        var notifier = sendScope.ServiceProvider.GetRequiredService<INotificationService>();
+                                        await notifier.SendNotificationAsync(new Notification
+                                        {
+                                            UserId = userId,
+                                            Type = NotificationType.System,
+                                            Title = "New Announcement",
+                                            Message = message,
+                                            ReferenceId = null,
+                                            ImageThumbnailUrl = null
+                                        });
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        logger.LogError(ex, "Failed to send announcement notification to user {UserId}", userId);
+                                    }
+                                }));
                             }
 
                             page++;
@@ -614,9 +627,11 @@ namespace Ping.Controllers
                         catch (Exception ex)
                         {
                             logger.LogError(ex, "Failed to process announcement notification batch {Page}", page);
-                            hasMore = false; // Halt execution if a critical DB error occurs
+                            break; // Halt execution if a critical DB error occurs
                         }
                     }
+
+                    logger.LogInformation("Announcement notification fan-out finished after {Pages} batch(es)", page);
                 });
             }
 

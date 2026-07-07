@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\Ping.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
