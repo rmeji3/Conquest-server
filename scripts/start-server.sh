@@ -3,11 +3,23 @@ set -euo pipefail
 # ============================================================
 # Pull image from ECR and run with secrets from SSM
 # Run this on the EC2 instance
+#
+# Usage:
+#   ./scripts/start-server.sh           # :latest + /ping-server SSM
+#   ./scripts/start-server.sh staging   # :staging + /ping-staging SSM
 # ============================================================
 
 REGION="us-east-1"
-PREFIX="/ping-server"
-IMAGE="084128132616.dkr.ecr.us-east-1.amazonaws.com/ping-server:latest"
+REPO="084128132616.dkr.ecr.us-east-1.amazonaws.com/ping-server"
+TAG="${1:-latest}"
+
+if [[ "$TAG" == "staging" ]]; then
+  PREFIX="/ping-staging"
+else
+  PREFIX="/ping-server"
+fi
+
+IMAGE="$REPO:$TAG"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/docker-compose.server.yml" ]]; then
   ROOT_DIR="$SCRIPT_DIR"
@@ -26,10 +38,10 @@ p() { aws ssm get-parameter --name "$PREFIX/$1" --with-decryption --query "Param
 echo "=== Authenticating with ECR ==="
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin 084128132616.dkr.ecr.$REGION.amazonaws.com
 
-echo "=== Pulling latest image ==="
+echo "=== Pulling $IMAGE ==="
 docker pull $IMAGE
 
-echo "=== Fetching secrets from SSM ==="
+echo "=== Fetching secrets from SSM ($PREFIX) ==="
 cat > "$ENV_FILE" <<EOF
 PING_IMAGE=$IMAGE
 AUTH_CONNECTION=$(p AUTH_CONNECTION)

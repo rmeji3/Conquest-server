@@ -3,10 +3,16 @@ set -e  # Exit immediately on any error
 # ============================================================
 # Build and Push multi-platform image to ECR
 # Run this from your local development machine
+#
+# Usage:
+#   ./scripts/build-and-push.sh           # pushes :latest
+#   ./scripts/build-and-push.sh staging   # pushes :staging
 # ============================================================
 
 REGION="us-east-1"
 REPO="084128132616.dkr.ecr.us-east-1.amazonaws.com/ping-server"
+TAG="${1:-latest}"
+IMAGE="$REPO:$TAG"
 
 # Navigate to the repository root (parent of the scripts directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,12 +25,14 @@ aws ecr get-login-password --region $REGION | docker login --username AWS --pass
 if ! docker buildx inspect multiplatform > /dev/null 2>&1; then
     echo "=== Creating new buildx builder ==="
     docker buildx create --name multiplatform --use
+else
+    docker buildx use multiplatform
 fi
 
-echo "=== Building and Pushing multi-platform image (amd64, arm64) ==="
+echo "=== Building and Pushing $IMAGE (amd64, arm64) ==="
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t $REPO:latest \
+  -t "$IMAGE" \
   --push .
 
-echo "=== Done! ==="
+echo "=== Done! Pushed $IMAGE ==="

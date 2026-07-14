@@ -55,15 +55,22 @@ This repo includes a production compose stack in `docker-compose.server.yml` and
 
 ### 1) Build and push image from your local machine
 ```bash
-./scripts/build-and-push.sh
+./scripts/build-and-push.sh           # :latest
+./scripts/build-and-push.sh staging   # :staging
 ```
 
-### 2) SSH into your server and deploy latest image
+### 2) SSH into your server and deploy
 ```bash
 ssh <user>@<server>
 cd /path/to/Ping-server
-./scripts/start-server.sh
+./scripts/start-server.sh           # production (:latest)
+./scripts/start-server.sh staging   # staging (:staging)
 ```
+
+**Staging prerequisites on EC2:**
+1. Push the image first: `./scripts/build-and-push.sh staging`
+2. Ensure `/ping-staging/*` SSM params exist (see `scripts/clone-ssm-to-staging.sh`)
+3. EC2 instance role needs `ssm:GetParameter` on `/ping-staging/*` and ECR pull access
 
 What `start-server.sh` does:
 - Authenticates Docker to ECR.
