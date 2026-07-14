@@ -302,6 +302,7 @@ builder.Services.AddScoped<IBanningService, BanningService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<Ping.Services.Stickers.IStickerService, Ping.Services.Stickers.StickerService>();
+builder.Services.AddScoped<Ping.Services.Achievements.IAchievementService, Ping.Services.Achievements.AchievementService>();
 builder.Services.AddScoped<Ping.Services.Verification.IVerificationService, Ping.Services.Verification.VerificationService>();
 builder.Services.AddHostedService<AnalyticsBackgroundJob>();
 builder.Services.AddHostedService<Ping.Services.Background.UnverifiedUserCleanupService>();

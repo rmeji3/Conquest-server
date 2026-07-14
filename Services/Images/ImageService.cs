@@ -11,6 +11,18 @@ namespace Ping.Services.Images;
 
 public class ImageService(IStorageService storageService, HttpClient httpClient, ILogger<ImageService> logger) : IImageService
 {
+    static ImageService()
+    {
+        // Bound ImageMagick's native pixel-cache RAM. Its allocations are invisible to
+        // the .NET GC, and one 48MP iPhone HEIC decodes to ~200MB of pixels — two
+        // concurrent decodes blew past the prod container's 512MB cgroup limit and got
+        // the process OOM-killed mid-backfill. Above this cap Magick transparently
+        // spills the pixel cache to a disk-backed file (slower, but bounded); above
+        // the disk cap it throws a catchable exception instead of dying.
+        ImageMagick.ResourceLimits.Memory = 128UL * 1024 * 1024;
+        ImageMagick.ResourceLimits.Disk = 1UL * 1024 * 1024 * 1024;
+    }
+
     // Sized for the explore feed's 2-column masonry: cards are ~180pt wide, which is
     // ~540 physical px on 3x devices. The cap applies to the LONG edge, so portrait
     // photos need headroom for their short edge to still cover the card — 500 left

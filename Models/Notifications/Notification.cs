@@ -20,7 +20,9 @@ public enum NotificationType
     NewEventComment = 12,
     VerificationResult = 13,
     BusinessClaimResult = 14,
-    EventStartsSoon = 15
+    EventStartsSoon = 15,
+    ReviewStickerReaction = 16,
+    AchievementUnlocked = 17
 }
 
 public class Notification

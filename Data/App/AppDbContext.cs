@@ -9,6 +9,7 @@ using Ping.Models.Search;
 using Ping.Models;
 using Ping.Models.Notifications;
 using Ping.Models.Stickers;
+using Ping.Models.Achievements;
 using NpgsqlTypes; // For NpgsqlTsVector
 using Npgsql.EntityFrameworkCore.PostgreSQL; // For HasGeneratedTsVectorColumn extensions
 
@@ -30,6 +31,7 @@ namespace Ping.Data.App
         public DbSet<EventCommentReaction> EventCommentReactions => Set<EventCommentReaction>();
         public DbSet<Favorited> Favorited => Set<Favorited>();
         public DbSet<ReviewLike> ReviewLikes => Set<ReviewLike>();
+        public DbSet<ReviewStickerReaction> ReviewStickerReactions => Set<ReviewStickerReaction>();
         public DbSet<Reping> Repings => Set<Reping>();
         public DbSet<Report> Reports => Set<Report>();
         public DbSet<PingClaim> PingClaims => Set<PingClaim>();
@@ -44,6 +46,8 @@ namespace Ping.Data.App
         public DbSet<Sticker> Stickers => Set<Sticker>();
         public DbSet<UserSticker> UserStickers => Set<UserSticker>();
         public DbSet<ProfileStickerPlacement> ProfileStickerPlacements => Set<ProfileStickerPlacement>();
+        public DbSet<Achievement> Achievements => Set<Achievement>();
+        public DbSet<UserAchievement> UserAchievements => Set<UserAchievement>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -197,6 +201,31 @@ namespace Ping.Data.App
                 .HasForeignKey(us => us.StickerId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Achievement: unique key; reward sticker must outlive the achievement
+            // (Restrict) so deleting a sticker that's still a prize fails loudly
+            // instead of silently breaking the achievement.
+            builder.Entity<Achievement>()
+                .HasIndex(a => a.Key)
+                .IsUnique();
+            builder.Entity<Achievement>()
+                .HasOne(a => a.RewardSticker)
+                .WithMany()
+                .HasForeignKey(a => a.RewardStickerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<Achievement>()
+                .ToTable(t => t.HasCheckConstraint("CK_Achievement_Threshold", "\"Threshold\" >= 1"));
+
+            // UserAchievement: one unlock per user per achievement. The unique index
+            // also closes the duplicate-unlock race between concurrent requests.
+            builder.Entity<UserAchievement>()
+                .HasIndex(ua => new { ua.UserId, ua.AchievementId })
+                .IsUnique();
+            builder.Entity<UserAchievement>()
+                .HasOne(ua => ua.Achievement)
+                .WithMany()
+                .HasForeignKey(ua => ua.AchievementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // ProfileStickerPlacement: lookups by user; FK to sticker
             builder.Entity<ProfileStickerPlacement>()
                 .HasIndex(p => p.UserId);
@@ -300,6 +329,25 @@ namespace Ping.Data.App
             builder.Entity<ReviewLike>()
                 .HasIndex(rl => new { rl.ReviewId, rl.UserId })
                 .IsUnique();
+
+            // ReviewStickerReaction: up to 10 unique stickers per user per review
+            // (cap enforced in ReviewService). The unique index also closes the
+            // duplicate-insert race between concurrent requests.
+            builder.Entity<ReviewStickerReaction>()
+                .HasIndex(rr => new { rr.ReviewId, rr.UserId });
+            builder.Entity<ReviewStickerReaction>()
+                .HasIndex(rr => new { rr.ReviewId, rr.UserId, rr.StickerId })
+                .IsUnique();
+            builder.Entity<ReviewStickerReaction>()
+                .HasOne(rr => rr.Review)
+                .WithMany()
+                .HasForeignKey(rr => rr.ReviewId)
+                .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<ReviewStickerReaction>()
+                .HasOne(rr => rr.Sticker)
+                .WithMany()
+                .HasForeignKey(rr => rr.StickerId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // EventCommentReaction: unique per user per comment
             builder.Entity<EventCommentReaction>()

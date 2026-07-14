@@ -19,6 +19,7 @@ public class FollowService(
     UserManager<AppUser> userManager,
     INotificationService notificationService,
     Services.Blocks.IBlockService blockService,
+    IServiceScopeFactory scopeFactory,
     ILogger<FollowService> logger) : IFollowService
 {
     public async Task<string> FollowUserAsync(string userId, string targetId)
@@ -96,6 +97,22 @@ public class FollowService(
         }
         
         logger.LogInformation("User {UserId} followed {TargetId}", userId, targetId);
+
+        // Achievement check for the *followed* user (e.g. "reach 100 followers").
+        // Fire-and-forget on a fresh scope so it never delays or fails the follow.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var achievements = scope.ServiceProvider.GetRequiredService<Services.Achievements.IAchievementService>();
+                await achievements.CheckAndUnlockAsync(targetId, Models.Achievements.AchievementMetric.Followers);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Achievement check failed after follow for user {TargetId}", targetId);
+            }
+        });
 
         return "Followed successfully.";
     }

@@ -26,6 +26,7 @@ public class PingService(
     Services.Moderation.IModerationService moderationService,
     Services.AI.ISemanticService semanticService,
     ChannelWriter<PingGenreJob> genreJobWriter,
+    IServiceScopeFactory scopeFactory,
     ILogger<PingService> logger) : IPingService
 {
     public async Task<PingDetailsDto> CreatePingAsync(UpsertPingDto dto, string userId)
@@ -255,6 +256,22 @@ public class PingService(
             else
                 logger.LogWarning("[GenreClassifier] Genre job channel full — ping {PingId} will remain unclassified.", ping.Id);
         }
+
+        // Achievement check (e.g. "create 5 pings"). Fire-and-forget on a fresh scope
+        // so milestone bookkeeping never delays or fails the create request.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var achievements = scope.ServiceProvider.GetRequiredService<Services.Achievements.IAchievementService>();
+                await achievements.CheckAndUnlockAsync(userId, Models.Achievements.AchievementMetric.PingsCreated);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Achievement check failed after ping creation for user {UserId}", userId);
+            }
+        });
 
         return await ToPingDetailsDto(ping, userId);
     }

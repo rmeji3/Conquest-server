@@ -320,7 +320,9 @@ Property Configuration:
 - `ReviewDto(Id, Rating, Content?, UserId, UserName, ProfilePictureUrl, ImageUrl, ThumbnailUrl, CreatedAt, Likes, IsLiked, IsOwner, Tags[])`
 - `CreateReviewDto(Rating, Content?, ImageUrl, ThumbnailUrl?, Tags[])`
 - `UpdateReviewDto(Rating?, Content?, ImageUrl?, ThumbnailUrl?, Tags?[] )`
-- `ExploreReviewDto(ReviewId, PingActivityId, PingId, PingName, PingAddress, ActivityName, PingGenreName?, Latitude, Longitude, Rating, Content?, UserId, UserName, ProfilePictureUrl, ImageUrl, ThumbnailUrl, CreatedAt, Likes, IsLiked, IsOwner, Tags[], IsPingDeleted)`
+- `ExploreReviewDto(ReviewId, PingActivityId, PingId, PingName, PingAddress, ActivityName, PingGenreName?, Latitude, Longitude, Rating, Content?, UserId, UserName, ProfilePictureUrl, ImageUrl, ThumbnailUrl, CreatedAt, Likes, IsLiked, IsOwner, Tags[], IsPingDeleted, AdditionalImageUrls?[], Reactions?[])`
+- `ReviewReactionDto(StickerId, Key, ImageUrl?, Count, MyCount)` - Aggregated sticker reactions per review, ordered by count; `MyCount` is `1` when the current user chose that sticker and `0` otherwise. `Reactions` is a trailing/optional field on `ReviewDto`/`ExploreReviewDto` so old clients keep working.
+- `AddReviewReactionDto(StickerId)`
 
 ### Repings
 - `RepingDto(Id, ReviewId, UserId, CreatedAt, Privacy, Review(ExploreReviewDto))`
@@ -669,6 +671,9 @@ Notation: `[]` = route parameter, `(Q)` = query parameter, `(Body)` = JSON body.
 | GET    | /api/reviews/explore                                       | A    | `ExploreReviewsFilterDto` | `PaginatedResult<ExploreReviewDto>` | Review feed. Scope: 'global' (Trending) or 'friends' (Recent). |
 | POST   | /api/reviews/{reviewId}/like                               | A    | —                         | 200 OK               | Like a review (idempotent)                         |
 | DELETE | /api/reviews/{reviewId}/like                               | A    | —                         | 204 NoContent        | Unlike a review (idempotent)                       |
+| POST   | /api/reviews/{reviewId}/reactions                          | A    | `AddReviewReactionDto`    | 200 OK               | Add one unique sticker reaction (max 10 different stickers per user per review; must own sticker; verified/founder badges forbidden; 400 for duplicate/cap/unowned/badge) |
+| DELETE | /api/reviews/{reviewId}/reactions (Q: stickerId?)          | A    | —                         | 200 OK               | Remove own reactions — all, or one sticker (idempotent) |
+| GET    | /api/reviews/{reviewId}/reactions                          | A    | —                         | `ReviewReactionDto[]` | Aggregated sticker reactions for a review          |
 | GET    | /api/reviews/liked (Q: pageNumber, pageSize)               | A    | —                         | `PaginatedResult<ExploreReviewDto>` | User's liked reviews (Alias for profiles/me/likes) |
 | GET    | /api/reviews/me (Q: pageNumber, pageSize)                  | A    | —                         | `PaginatedResult<ExploreReviewDto>` | User's own reviews                                 |
 | POST   | /api/notifications/register-device                         | A    | `RegisterDeviceDto`       | 200 OK               | Register SNS platform endpoint for push            |
@@ -1353,7 +1358,7 @@ The notification system handles real-time alerts and persistent history for user
 
 ### Notification Types (`NotificationType`)
 - **Social**: `Follower` (4), `MutualFollow` (8) - Triggered when two users follow each other (Friendship).
-- **Reviews**: `ReviewLike` (1), `NewReviewOnYourPing` (9) - Notifies Ping owner of new reviews.
+- **Reviews**: `ReviewLike` (1), `NewReviewOnYourPing` (9) - Notifies Ping owner of new reviews. `ReviewStickerReaction` (16) - Notifies the review author only on a user's first reaction per review; choosing more unique stickers never re-notifies.
 - **Events**: 
   - `EventInvite` (3), `EventUpdate` (10), `EventCancelled` (11).
   - `NewEventComment` (12), `CommentLike` (6), `CommentReply` (5).

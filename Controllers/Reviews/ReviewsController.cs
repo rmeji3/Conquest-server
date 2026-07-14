@@ -215,6 +215,72 @@ namespace Ping.Controllers.Reviews
             }
         }
 
+        // POST /api/reviews/{reviewId}/reactions — add one unique sticker (max 10 per user)
+        [HttpPost("/api/reviews/{reviewId:int}/reactions")]
+        [HttpPost("/api/v{version:apiVersion}/reviews/{reviewId:int}/reactions")]
+        public async Task<IActionResult> AddReviewReaction(int reviewId, AddReviewReactionDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                logger.LogWarning("AddReviewReaction: User is not authenticated or missing id.");
+                return Unauthorized();
+            }
+
+            try
+            {
+                await reviewService.AddReviewReactionAsync(reviewId, userId, dto.StickerId);
+                logger.LogInformation("AddReviewReaction: Review {ReviewId} reacted to by {UserId}", reviewId, userId);
+                return Ok();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                logger.LogWarning("AddReviewReaction: {Message}", ex.Message);
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogWarning("AddReviewReaction: {Message}", ex.Message);
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // DELETE /api/reviews/{reviewId}/reactions[?stickerId=] — remove the current
+        // user's reactions (all, or only the given sticker)
+        [HttpDelete("/api/reviews/{reviewId:int}/reactions")]
+        [HttpDelete("/api/v{version:apiVersion}/reviews/{reviewId:int}/reactions")]
+        public async Task<IActionResult> RemoveReviewReactions(int reviewId, [FromQuery] string? stickerId = null)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                logger.LogWarning("RemoveReviewReactions: User is not authenticated or missing id.");
+                return Unauthorized();
+            }
+
+            await reviewService.RemoveReviewReactionsAsync(reviewId, userId, stickerId);
+            logger.LogInformation("RemoveReviewReactions: Review {ReviewId} reactions removed by {UserId}", reviewId, userId);
+            return Ok();
+        }
+
+        // GET /api/reviews/{reviewId}/reactions — aggregated sticker reactions
+        [HttpGet("/api/reviews/{reviewId:int}/reactions")]
+        [HttpGet("/api/v{version:apiVersion}/reviews/{reviewId:int}/reactions")]
+        public async Task<ActionResult<List<ReviewReactionDto>>> GetReviewReactions(int reviewId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            try
+            {
+                return Ok(await reviewService.GetReviewReactionsAsync(reviewId, userId));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                logger.LogWarning("GetReviewReactions: Review {ReviewId} not found.", reviewId);
+                return NotFound(ex.Message);
+            }
+        }
+
         // GET /api/reviews/liked
         [HttpGet("/api/reviews/liked")]
         [HttpGet("/api/v{version:apiVersion}/reviews/liked")]

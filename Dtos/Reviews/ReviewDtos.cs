@@ -23,7 +23,26 @@ public record ReviewDto(
     // name/address on share cards. Trailing + defaulted so the other call sites
     // that don't carry place context keep compiling unchanged.
     string? PingName = null,
-    string? PingAddress = null
+    string? PingAddress = null,
+    List<ReviewReactionDto>? Reactions = null
+);
+
+/// <summary>
+/// Aggregated sticker reactions on a review, grouped by sticker. Includes sticker
+/// metadata so clients can render without joining the catalog. <c>MyCount</c> is 1
+/// when the current user chose the sticker and 0 otherwise; each user can choose up
+/// to 10 unique stickers per review.
+/// </summary>
+public record ReviewReactionDto(
+    string StickerId,
+    string Key,
+    string? ImageUrl,
+    int Count,
+    int MyCount
+);
+
+public record AddReviewReactionDto(
+    [Required] string StickerId
 );
 
 public record CreateReviewDto(
@@ -75,7 +94,8 @@ public record ExploreReviewDto(
     bool IsOwner,
     List<string> Tags,
     bool IsPingDeleted,
-    List<string>? AdditionalImageUrls = null
+    List<string>? AdditionalImageUrls = null,
+    List<ReviewReactionDto>? Reactions = null
 );
 
 /// <summary>Progress report for one batch of the admin thumbnail backfill.</summary>

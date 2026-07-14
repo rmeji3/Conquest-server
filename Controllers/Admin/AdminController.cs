@@ -15,6 +15,8 @@ using Ping.Services.Moderation;
 using Ping.Services;
 using Ping.Services.Auth;
 using Ping.Services.Stickers;
+using Ping.Services.Achievements;
+using Ping.Dtos.Achievements;
 using Ping.Dtos.Business;
 using Ping.Dtos.Tags;
 using Ping.Dtos.Verification;
@@ -44,6 +46,7 @@ namespace Ping.Controllers
         IVerificationService verificationService,
         IAuthService authService,
         IStickerService stickerService,
+        IAchievementService achievementService,
 
         Microsoft.AspNetCore.Identity.UserManager<AppUser> userManager,
         Ping.Services.Admin.IDbJanitorService janitorService,
@@ -548,6 +551,74 @@ namespace Ping.Controllers
             {
                 await stickerService.GrantStickerOwnershipAsync(userIdentifier, stickerId);
                 return Ok(new { message = "Sticker ownership granted successfully." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // Achievements Management
+        // ==========================================
+
+        [HttpPost("achievements")]
+        public async Task<ActionResult<AdminAchievementDto>> CreateAchievement([FromBody] UpsertAchievementDto dto)
+        {
+            try
+            {
+                var achievement = await achievementService.CreateAsync(dto);
+                return CreatedAtAction(nameof(GetAllAchievements), new { }, achievement);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("achievements")]
+        public async Task<ActionResult<List<AdminAchievementDto>>> GetAllAchievements()
+        {
+            return Ok(await achievementService.GetAllForAdminAsync());
+        }
+
+        [HttpPut("achievements/{id}")]
+        public async Task<ActionResult<AdminAchievementDto>> UpdateAchievement(string id, [FromBody] UpsertAchievementDto dto)
+        {
+            try
+            {
+                return Ok(await achievementService.UpdateAsync(id, dto));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("achievements/{id}/toggle")]
+        public async Task<ActionResult<AdminAchievementDto>> ToggleAchievement(string id)
+        {
+            try
+            {
+                return Ok(await achievementService.ToggleActiveAsync(id));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("achievements/{id}")]
+        public async Task<IActionResult> DeleteAchievement(string id)
+        {
+            try
+            {
+                await achievementService.DeleteAsync(id);
+                return NoContent();
             }
             catch (KeyNotFoundException ex)
             {

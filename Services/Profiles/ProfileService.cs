@@ -23,12 +23,13 @@ using Ping.Services.Blocks;
 namespace Ping.Services.Profiles;
 
 public class ProfileService(
-    UserManager<AppUser> userManager, 
-    ILogger<ProfileService> logger, 
+    UserManager<AppUser> userManager,
+    ILogger<ProfileService> logger,
     Ping.Services.Images.IImageService imageService,
     AppDbContext appDb,
     IFollowService followService,
     IBlockService blockService,
+    Ping.Services.Reviews.IReviewService reviewService,
     Ping.Services.Moderation.IModerationService moderationService) : IProfileService
 {
     public async Task<PersonalProfileDto> GetMyProfileAsync(string userId)
@@ -742,29 +743,50 @@ public class ProfileService(
 
         var totalCount = await query.CountAsync();
         
-        var reviews = await query
+        // Project to an intermediate shape first (keeps the like aggregates in SQL),
+        // then attach the batched reaction summaries in memory.
+        var rows = await query
             .Skip((pagination.PageNumber - 1) * pagination.PageSize)
             .Take(pagination.PageSize)
-            .Select(r => new ReviewDto(
+            .Select(r => new
+            {
                 r.Id,
                 r.Rating,
                 r.Content,
                 r.UserId,
-                user.UserName!,
-                user.ProfileImageUrl,
-                r.ImageUrl ?? "",
-                r.ThumbnailUrl ?? "",
+                r.ImageUrl,
+                r.ThumbnailUrl,
                 r.CreatedAt,
-                r.LikesList.Count,
-                r.LikesList.Any(l => l.UserId == currentUserId),
-                r.UserId == currentUserId, // IsOwner
-                r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
-                ping.IsDeleted,
+                Likes = r.LikesList.Count,
+                IsLiked = r.LikesList.Any(l => l.UserId == currentUserId),
+                Tags = r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
                 r.AdditionalImageUrls,
-                ping.Name,
-                ping.Address ?? string.Empty
-            ))
+            })
             .ToListAsync();
+
+        var reactionsMap = await reviewService.GetReactionsForReviewsAsync(
+            rows.Select(r => r.Id).ToList(), currentUserId);
+
+        var reviews = rows.Select(r => new ReviewDto(
+            r.Id,
+            r.Rating,
+            r.Content,
+            r.UserId,
+            user.UserName!,
+            user.ProfileImageUrl,
+            r.ImageUrl ?? "",
+            r.ThumbnailUrl ?? "",
+            r.CreatedAt,
+            r.Likes,
+            r.IsLiked,
+            r.UserId == currentUserId, // IsOwner
+            r.Tags,
+            ping.IsDeleted,
+            r.AdditionalImageUrls,
+            ping.Name,
+            ping.Address ?? string.Empty,
+            reactionsMap.GetValueOrDefault(r.Id)
+        )).ToList();
 
         return new PaginatedResult<ReviewDto>(reviews, totalCount, pagination.PageNumber, pagination.PageSize);
     }

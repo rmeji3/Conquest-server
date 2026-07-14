@@ -9,11 +9,14 @@ using Ping.Services.Follows;
 using Ping.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Data.Sqlite;
+using Npgsql;
 using Ping.Models.Pings;
 
 using Ping.Services.Blocks;
 
 using Ping.Services.Notifications;
+using Ping.Services.Stickers;
 using Ping.Models;
 
 namespace Ping.Services.Reviews;
@@ -65,9 +68,9 @@ public class ReviewService(
 
         // Existing tags in one query; only genuinely new tag names need moderation.
         var existingTags = distinctTags.Count > 0
-            ? await appDb.Tags.Where(t => distinctTags.Contains(t.Name)).ToListAsync()
+            ? await appDb.Tags.Where(t => distinctTags.Contains(t.Name.ToLower())).ToListAsync()
             : new List<Tag>();
-        var tagsByName = existingTags.ToDictionary(t => t.Name);
+        var tagsByName = existingTags.ToDictionary(t => t.Name.ToLowerInvariant());
         var newTagNames = distinctTags.Where(n => !tagsByName.ContainsKey(n)).ToList();
 
         // Moderate the content and all new tags in a single API round trip; each
@@ -170,6 +173,24 @@ public class ReviewService(
             });
         }
 
+        // Achievement check (e.g. "create 25 reviews"). Fire-and-forget on a fresh
+        // scope for the same reason as the notification above — the reviewer
+        // shouldn't wait on milestone bookkeeping.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var achievements = scope.ServiceProvider.GetRequiredService<Ping.Services.Achievements.IAchievementService>();
+                await achievements.CheckAndUnlockAsync(userId, Ping.Models.Achievements.AchievementMetric.ReviewsCreated);
+                await achievements.CheckAndUnlockAsync(userId, Ping.Models.Achievements.AchievementMetric.ReviewsWithTag);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Achievement check failed after review creation for user {UserId}", userId);
+            }
+        });
+
         var user = await userManager.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         string? profileUrl = user?.ProfileImageUrl;
 
@@ -269,6 +290,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, userId);
+
         var reviewDtos = reviews.Select(r => new ReviewDto(
             r.Id,
             r.Rating,
@@ -280,11 +303,12 @@ public class ReviewService(
             r.ThumbnailUrl ?? "",
             r.CreatedAt,
             r.Likes,
-            likedReviewIds.Contains(r.Id), 
+            likedReviewIds.Contains(r.Id),
             r.UserId == userId, // IsOwner
             r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             r.PingActivity!.Ping.IsDeleted,
-            r.AdditionalImageUrls
+            r.AdditionalImageUrls,
+            Reactions: reactionsMap.GetValueOrDefault(r.Id)
         )).ToList();
 
         return new PaginatedResult<ReviewDto>(reviewDtos, count, pagination.PageNumber, pagination.PageSize);
@@ -415,6 +439,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, userId);
+
         var result = reviews.Select(r => new ExploreReviewDto(
             r.Id,
             r.PingActivityId,
@@ -434,14 +460,15 @@ public class ReviewService(
             r.ThumbnailUrl ?? "",
             r.CreatedAt,
             r.Likes,
-            likedReviewIds.Contains(r.Id), 
+            likedReviewIds.Contains(r.Id),
             r.UserId == userId, // IsOwner
-            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(), 
+            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             r.PingActivity.Ping.IsDeleted,
-            r.AdditionalImageUrls
+            r.AdditionalImageUrls,
+            reactionsMap.GetValueOrDefault(r.Id)
         )).ToList();
 
-        logger.LogInformation("Explore reviews fetched: Page {PageNumber}, Size {PageSize}, Count {Count}", 
+        logger.LogInformation("Explore reviews fetched: Page {PageNumber}, Size {PageSize}, Count {Count}",
             pagination.PageNumber, pagination.PageSize, count);
 
         return new PaginatedResult<ExploreReviewDto>(result, count, pagination.PageNumber, pagination.PageSize);
@@ -580,6 +607,172 @@ public class ReviewService(
         logger.LogInformation("Review {ReviewId} unliked by {UserId}", reviewId, userId);
     }
 
+    // Per-user reaction budget per review; also mirrored client-side.
+    public const int MaxReactionsPerUserPerReview = 10;
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation
+        }
+        || exception.InnerException is SqliteException { SqliteErrorCode: 19 };
+
+    public async Task AddReviewReactionAsync(int reviewId, string userId, string stickerId)
+    {
+        var review = await appDb.Reviews.FindAsync(reviewId);
+        if (review == null)
+        {
+            throw new KeyNotFoundException("Review not found.");
+        }
+
+        var sticker = await appDb.Stickers.FindAsync(stickerId);
+        if (sticker == null || !sticker.IsActive)
+        {
+            throw new KeyNotFoundException($"Sticker with ID {stickerId} not found or is inactive.");
+        }
+
+        if (sticker.Key is StickerService.VerifiedBadgeKey or StickerService.FounderBadgeKey)
+        {
+            throw new ArgumentException("Verified and founding member badges cannot be used as review reactions.");
+        }
+
+        var ownsSticker = await appDb.UserStickers.AnyAsync(us => us.UserId == userId && us.StickerId == stickerId);
+        if (!ownsSticker)
+        {
+            throw new ArgumentException("You can only react with stickers you own.");
+        }
+
+        var alreadyReacted = await appDb.ReviewStickerReactions.AnyAsync(rr =>
+            rr.ReviewId == reviewId &&
+            rr.UserId == userId &&
+            rr.StickerId == stickerId);
+        if (alreadyReacted)
+        {
+            throw new ArgumentException("You have already reacted with this sticker.");
+        }
+
+        var myCount = await appDb.ReviewStickerReactions
+            .CountAsync(rr => rr.ReviewId == reviewId && rr.UserId == userId);
+        if (myCount >= MaxReactionsPerUserPerReview)
+        {
+            throw new ArgumentException(
+                $"You can react with up to {MaxReactionsPerUserPerReview} different stickers per review.");
+        }
+
+        var reaction = new ReviewStickerReaction
+        {
+            ReviewId = reviewId,
+            UserId = userId,
+            StickerId = stickerId,
+            CreatedAt = DateTime.UtcNow
+        };
+        appDb.ReviewStickerReactions.Add(reaction);
+
+        try
+        {
+            await appDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            appDb.Entry(reaction).State = EntityState.Detached;
+            throw new ArgumentException("You have already reacted with this sticker.", ex);
+        }
+        logger.LogInformation("Review {ReviewId} reacted to by {UserId} with sticker {StickerId}", reviewId, userId, stickerId);
+
+        // Notify only on the user's first reaction on this review so choosing
+        // additional unique stickers doesn't spam the author.
+        if (myCount == 0 && review.UserId != userId)
+        {
+            var sender = await userManager.FindByIdAsync(userId);
+            await notificationService.SendNotificationAsync(new Notification
+            {
+                UserId = review.UserId,
+                SenderId = userId,
+                SenderName = sender?.UserName ?? "Someone",
+                SenderProfileImageUrl = sender?.ProfileImageUrl,
+                Type = NotificationType.ReviewStickerReaction,
+                Title = "New Reaction",
+                Message = $"{sender?.UserName ?? "Someone"} reacted to your review with the {sticker.Name} sticker.",
+                ReferenceId = reviewId.ToString(),
+                ImageThumbnailUrl = review.ThumbnailUrl ?? review.ImageUrl
+            });
+        }
+    }
+
+    public async Task RemoveReviewReactionsAsync(int reviewId, string userId, string? stickerId = null)
+    {
+        var query = appDb.ReviewStickerReactions
+            .Where(rr => rr.ReviewId == reviewId && rr.UserId == userId);
+        if (stickerId != null)
+        {
+            query = query.Where(rr => rr.StickerId == stickerId);
+        }
+
+        var reactions = await query.ToListAsync();
+        if (reactions.Count == 0)
+        {
+            logger.LogInformation("Review {ReviewId} has no reactions by {UserId}, nothing to remove", reviewId, userId);
+            return;
+        }
+
+        appDb.ReviewStickerReactions.RemoveRange(reactions);
+        await appDb.SaveChangesAsync();
+        logger.LogInformation("Review {ReviewId}: {Count} reactions removed by {UserId}", reviewId, reactions.Count, userId);
+    }
+
+    public async Task<List<ReviewReactionDto>> GetReviewReactionsAsync(int reviewId, string? userId)
+    {
+        var reviewExists = await appDb.Reviews.AnyAsync(r => r.Id == reviewId);
+        if (!reviewExists)
+        {
+            throw new KeyNotFoundException("Review not found.");
+        }
+
+        var reactionsMap = await GetReactionsForReviewsAsync(new List<int> { reviewId }, userId);
+        return reactionsMap.GetValueOrDefault(reviewId) ?? new List<ReviewReactionDto>();
+    }
+
+    /// <summary>
+    /// Aggregated sticker reactions for a batch of reviews, grouped per review by sticker
+    /// and ordered by count (then key) so clients can show the top reactions first.
+    /// Inactive stickers are excluded. One batched query per feed page.
+    /// </summary>
+    public async Task<Dictionary<int, List<ReviewReactionDto>>> GetReactionsForReviewsAsync(List<int> reviewIds, string? userId)
+    {
+        if (reviewIds.Count == 0)
+        {
+            return new Dictionary<int, List<ReviewReactionDto>>();
+        }
+
+        var reactions = await appDb.ReviewStickerReactions
+            .AsNoTracking()
+            .Where(rr => reviewIds.Contains(rr.ReviewId) && rr.Sticker != null && rr.Sticker.IsActive)
+            .Select(rr => new
+            {
+                rr.ReviewId,
+                rr.StickerId,
+                StickerKey = rr.Sticker!.Key,
+                rr.Sticker.ImageUrl,
+                rr.UserId
+            })
+            .ToListAsync();
+
+        return reactions
+            .GroupBy(r => r.ReviewId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(r => r.StickerId)
+                    .Select(sg => new ReviewReactionDto(
+                        sg.Key,
+                        sg.First().StickerKey,
+                        sg.First().ImageUrl,
+                        sg.Count(),
+                        userId != null ? sg.Count(r => r.UserId == userId) : 0))
+                    .OrderByDescending(dto => dto.Count)
+                    .ThenBy(dto => dto.Key)
+                    .ToList());
+    }
+
     public async Task<PaginatedResult<ExploreReviewDto>> GetUserLikesAsync(string targetUserId, string viewerUserId, PaginationParams pagination, string? sortBy = null, string? sortOrder = null)
     {
         var targetUser = await userManager.FindByIdAsync(targetUserId);
@@ -645,6 +838,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
         
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, viewerUserId);
+
         var result = likedReviews.Select(rl => new ExploreReviewDto(
                 rl.Review.Id,
                 rl.Review.PingActivityId,
@@ -668,7 +863,8 @@ public class ReviewService(
                 rl.Review.UserId == viewerUserId, // IsOwner
                 rl.Review.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
                 rl.Review.PingActivity.Ping.IsDeleted,
-                rl.Review.AdditionalImageUrls
+                rl.Review.AdditionalImageUrls,
+                reactionsMap.GetValueOrDefault(rl.Review.Id)
             )).ToList();
 
         return result.ToPaginatedResult(pagination);
@@ -713,6 +909,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(likedReviews.Select(rl => rl.ReviewId).ToList(), userId);
+
         var result = likedReviews.Select(rl => new ExploreReviewDto(
                 rl.Review.Id,
                 rl.Review.PingActivityId,
@@ -736,7 +934,8 @@ public class ReviewService(
                 rl.Review.UserId == userId, // IsOwner
                 rl.Review.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
                 rl.Review.PingActivity.Ping.IsDeleted,
-                rl.Review.AdditionalImageUrls
+                rl.Review.AdditionalImageUrls,
+                reactionsMap.GetValueOrDefault(rl.Review.Id)
             )).ToList();
 
         logger.LogInformation("Liked reviews for {UserId} retrieved: {Count} reviews", userId, result.Count);
@@ -778,6 +977,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, userId);
+
         var result = myReviews.Select(r => new ExploreReviewDto(
             r.Id,
             r.PingActivityId,
@@ -801,7 +1002,8 @@ public class ReviewService(
             true, // IsOwner (My Review)
             r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             r.PingActivity.Ping.IsDeleted,
-            r.AdditionalImageUrls
+            r.AdditionalImageUrls,
+            reactionsMap.GetValueOrDefault(r.Id)
         )).ToList();
 
         logger.LogInformation("My reviews fetched for {UserId}: {Count} reviews", userId, result.Count);
@@ -848,6 +1050,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, currentUserId);
+
         var result = userReviews.Select(r => new ExploreReviewDto(
             r.Id,
             r.PingActivityId,
@@ -867,11 +1071,12 @@ public class ReviewService(
             r.ThumbnailUrl ?? "",
             r.CreatedAt,
             r.Likes,
-            likedReviewIds.Contains(r.Id), 
+            likedReviewIds.Contains(r.Id),
             r.UserId == currentUserId, // IsOwner
-            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(), 
+            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             r.PingActivity.Ping.IsDeleted,
-            r.AdditionalImageUrls
+            r.AdditionalImageUrls,
+            reactionsMap.GetValueOrDefault(r.Id)
         )).ToList();
 
         logger.LogInformation("User reviews fetched for {UserId}: {Count} reviews", targetUserId, result.Count);
@@ -929,6 +1134,8 @@ public class ReviewService(
              foreach(var u in users) userMap[u.Id] = u.ProfileImageUrl;
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(reviewIds, userId);
+
         var result = reviews.Select(r => new ExploreReviewDto(
             r.Id,
             r.PingActivityId,
@@ -948,11 +1155,12 @@ public class ReviewService(
             r.ThumbnailUrl ?? "",
             r.CreatedAt,
             r.Likes,
-            likedReviewIds.Contains(r.Id), 
+            likedReviewIds.Contains(r.Id),
             r.UserId == userId, // IsOwner
-            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(), 
+            r.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             r.PingActivity.Ping.IsDeleted,
-            r.AdditionalImageUrls
+            r.AdditionalImageUrls,
+            reactionsMap.GetValueOrDefault(r.Id)
         )).ToList();
 
         logger.LogInformation("Friends feed fetched for {UserId}: {Count} reviews", userId, result.Count);
@@ -1126,7 +1334,7 @@ public class ReviewService(
 
             foreach (var tagName in distinctTags)
             {
-                var tag = await appDb.Tags.FirstOrDefaultAsync(t => t.Name == tagName);
+                var tag = await appDb.Tags.FirstOrDefaultAsync(t => t.Name.ToLower() == tagName);
                 if (tag == null)
                 {
                     var tagMod = await moderationService.CheckContentAsync(tagName);
@@ -1144,6 +1352,23 @@ public class ReviewService(
         {
             await appDb.SaveChangesAsync();
             logger.LogInformation("Review {ReviewId} updated by {UserId}", reviewId, userId);
+
+            if (dto.Tags != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var scope = scopeFactory.CreateScope();
+                        var achievements = scope.ServiceProvider.GetRequiredService<Ping.Services.Achievements.IAchievementService>();
+                        await achievements.CheckAndUnlockAsync(userId, Ping.Models.Achievements.AchievementMetric.ReviewsWithTag);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Achievement check failed after review tag update for user {UserId}", userId);
+                    }
+                });
+            }
         }
 
         // Return updated DTO
@@ -1188,6 +1413,8 @@ public class ReviewService(
             isLiked = await appDb.ReviewLikes.AnyAsync(rl => rl.ReviewId == review.Id && rl.UserId == userId);
         }
 
+        var reactionsMap = await GetReactionsForReviewsAsync(new List<int> { review.Id }, userId);
+
         return new ExploreReviewDto(
             review.Id,
             review.PingActivityId,
@@ -1211,7 +1438,8 @@ public class ReviewService(
             review.UserId == userId, // IsOwner
             review.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
             review.PingActivity.Ping.IsDeleted,
-            review.AdditionalImageUrls
+            review.AdditionalImageUrls,
+            reactionsMap.GetValueOrDefault(review.Id)
         );
     }
 }
