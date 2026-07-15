@@ -164,7 +164,7 @@ public class AchievementService(
                     UserId = userId,
                     Type = NotificationType.AchievementUnlocked,
                     Title = "Achievement unlocked!",
-                    Message = $"{achievement.Name} — the {achievement.RewardSticker?.Name} sticker is yours.",
+                    Message = $"{achievement.Name}: the {achievement.RewardSticker?.Name} sticker is yours.",
                     ReferenceId = achievement.Id,
                     ImageThumbnailUrl = achievement.RewardSticker?.ImageUrl,
                 });
