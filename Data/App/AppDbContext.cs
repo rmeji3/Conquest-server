@@ -137,6 +137,13 @@ namespace Ping.Data.App
             builder.Entity<Review>()
                 .HasIndex(r => new { r.PingActivityId, r.UserId });
 
+            // Idempotency backstop: at most one review per (user, client key).
+            // Filtered so legacy clients (null key) are unaffected.
+            builder.Entity<Review>()
+                .HasIndex(r => new { r.UserId, r.ClientRequestId })
+                .IsUnique()
+                .HasFilter("\"ClientRequestId\" IS NOT NULL");
+
             builder.Entity<Review>()
                 .ToTable(t => t.HasCheckConstraint("CK_Review_Rating", "\"Rating\" >= 1 AND \"Rating\" <= 5"));
 

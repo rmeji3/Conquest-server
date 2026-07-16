@@ -34,6 +34,24 @@ public class ReviewService(
 {
     public async Task<ReviewDto> CreateReviewAsync(int pingActivityId, CreateReviewDto dto, string userId, string userName)
     {
+        var clientRequestId = string.IsNullOrWhiteSpace(dto.ClientRequestId)
+            ? null
+            : dto.ClientRequestId.Trim();
+
+        // Idempotency: a retry of a create that already succeeded (the client
+        // never saw the response) returns the original review, not a duplicate.
+        if (clientRequestId != null)
+        {
+            var existing = await FindReviewByClientRequestIdAsync(userId, clientRequestId);
+            if (existing != null)
+            {
+                logger.LogInformation(
+                    "CreateReview: Returning existing review {ReviewId} for retried client request {ClientRequestId}",
+                    existing.Id, clientRequestId);
+                return existing;
+            }
+        }
+
         // Ensure activity exists
         var activityExists = await appDb.PingActivities
             .AnyAsync(pa => pa.Id == pingActivityId);
@@ -104,6 +122,7 @@ public class ReviewService(
             PingActivityId = pingActivityId,
             UserId = userId,
             UserName = userName,
+            ClientRequestId = clientRequestId,
             Rating = dto.Rating,
             Type = hasReview ? ReviewType.CheckIn : ReviewType.Review,
             Content = dto.Content,
@@ -129,7 +148,26 @@ public class ReviewService(
         }
 
         appDb.Reviews.Add(review);
-        await appDb.SaveChangesAsync();
+        try
+        {
+            await appDb.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (clientRequestId != null && IsUniqueConstraintViolation(ex))
+        {
+            // Lost a race against a concurrent retry of the same client request —
+            // the unique (UserId, ClientRequestId) index rejected this insert.
+            // Return the review the winning request created.
+            appDb.Entry(review).State = EntityState.Detached;
+            var winner = await FindReviewByClientRequestIdAsync(userId, clientRequestId);
+            if (winner != null)
+            {
+                logger.LogInformation(
+                    "CreateReview: Concurrent retry for client request {ClientRequestId}; returning review {ReviewId}",
+                    clientRequestId, winner.Id);
+                return winner;
+            }
+            throw;
+        }
 
         logger.LogInformation("Review created for Activity {PingActivityId} by {UserName}. Rating: {Rating}", pingActivityId, userName, dto.Rating);
 
@@ -211,6 +249,39 @@ public class ReviewService(
             true, // IsOwner
             dto.Tags ?? new List<string>(), // Return tags
             pingInfo?.IsDeleted ?? false,
+            review.AdditionalImageUrls
+        );
+    }
+
+    public async Task<ReviewDto?> FindReviewByClientRequestIdAsync(string userId, string clientRequestId)
+    {
+        var review = await appDb.Reviews
+            .AsNoTracking()
+            .Include(r => r.ReviewTags).ThenInclude(rt => rt.Tag)
+            .Include(r => r.PingActivity).ThenInclude(pa => pa.Ping)
+            .FirstOrDefaultAsync(r => r.UserId == userId && r.ClientRequestId == clientRequestId);
+
+        if (review == null) return null;
+
+        var user = await userManager.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        var isLiked = await appDb.ReviewLikes
+            .AnyAsync(l => l.ReviewId == review.Id && l.UserId == userId);
+
+        return new ReviewDto(
+            review.Id,
+            review.Rating,
+            review.Content,
+            review.UserId,
+            review.UserName,
+            user?.ProfileImageUrl,
+            review.ImageUrl ?? "",
+            review.ThumbnailUrl ?? "",
+            review.CreatedAt,
+            review.Likes,
+            isLiked,
+            true, // IsOwner — the lookup is scoped to the caller's own reviews
+            review.ReviewTags.Select(rt => rt.Tag.Name).ToList(),
+            review.PingActivity.Ping.IsDeleted,
             review.AdditionalImageUrls
         );
     }

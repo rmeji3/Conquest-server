@@ -6,6 +6,14 @@ namespace Ping.Services.Reviews;
 public interface IReviewService
 {
     Task<ReviewDto> CreateReviewAsync(int pingActivityId, CreateReviewDto dto, string userId, string userName);
+
+    /// <summary>
+    /// The user's review created with this idempotency key, or null if none.
+    /// Lets a retried create (same <c>ClientRequestId</c>) return the original
+    /// review — callers check this before doing any per-request work like
+    /// image uploads.
+    /// </summary>
+    Task<ReviewDto?> FindReviewByClientRequestIdAsync(string userId, string clientRequestId);
     Task<PaginatedResult<ReviewDto>> GetReviewsAsync(int pingActivityId, string scope, string userId, PaginationParams pagination);
     Task<PaginatedResult<ExploreReviewDto>> GetExploreReviewsAsync(ExploreReviewsFilterDto filter, string? userId, PaginationParams pagination);
     Task LikeReviewAsync(int reviewId, string userId);

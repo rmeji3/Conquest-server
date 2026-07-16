@@ -55,7 +55,11 @@ public record CreateReviewDto(
     [MaxLength(2048)]
     string? ThumbnailUrl,
     List<string>? Tags = null,
-    List<string>? AdditionalImageUrls = null
+    List<string>? AdditionalImageUrls = null,
+    // Idempotency key: retries of the same client submission reuse it, and the
+    // server returns the already-created review instead of a duplicate.
+    [MaxLength(64)]
+    string? ClientRequestId = null
 );
 
 public record UpdateReviewDto(

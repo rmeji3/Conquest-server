@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Ping.Dtos.Reviews;
 using Ping.Services.Reviews;
@@ -22,6 +23,11 @@ namespace Ping.Controllers.Reviews
             public IFormFile? Image { get; set; }
             public List<IFormFile>? Images { get; set; }
             public List<string>? Tags { get; set; }
+            // Idempotency key: the client's background upload queue sends the same
+            // value on every retry of one submission, so a create whose response was
+            // lost can't produce a duplicate review. Optional for legacy clients.
+            [MaxLength(64)]
+            public string? ClientRequestId { get; set; }
         }
 
         public class UpdateReviewRequest
@@ -53,6 +59,25 @@ namespace Ping.Controllers.Reviews
             {
                 logger.LogWarning("CreateReview: User is not authenticated or missing id/username.");
                 return Unauthorized("User is not authenticated or missing id/username.");
+            }
+
+            // A retry of a create that already succeeded returns the original review.
+            // Checked before image processing so retries don't re-upload to S3; the
+            // service re-checks (and the unique index backstops) for the race where
+            // two identical requests pass this check together.
+            var clientRequestId = string.IsNullOrWhiteSpace(request.ClientRequestId)
+                ? null
+                : request.ClientRequestId.Trim();
+            if (clientRequestId != null)
+            {
+                var existing = await reviewService.FindReviewByClientRequestIdAsync(userId, clientRequestId);
+                if (existing != null)
+                {
+                    logger.LogInformation(
+                        "CreateReview: Duplicate client request {ClientRequestId}; returning review {ReviewId} without reprocessing images.",
+                        clientRequestId, existing.Id);
+                    return Ok(existing);
+                }
             }
 
             string imageUrl = "";
@@ -99,7 +124,8 @@ namespace Ping.Controllers.Reviews
                 imageUrl,
                 thumbnailUrl,
                 request.Tags,
-                additionalImages
+                additionalImages,
+                clientRequestId
             );
 
             try

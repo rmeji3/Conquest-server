@@ -10,6 +10,12 @@ public class Review
     public string UserId { get; init; } = null!;  // FK reference only
     [MaxLength(100)]
     public string UserName { get; init; } = null!;
+    // Client-supplied idempotency key. The app's background upload queue sends
+    // the same key on every retry of one submission, so a create whose response
+    // was lost (app killed mid-request) can't produce a duplicate review.
+    // Null for legacy clients that don't send one.
+    [MaxLength(64)]
+    public string? ClientRequestId { get; init; }
     public int PingActivityId { get; set; }
     public PingActivity PingActivity { get; set; } = null!;
     [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5.")]
