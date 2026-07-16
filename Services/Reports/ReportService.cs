@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Ping.Data.App;
 using Ping.Dtos.Common;
 using Ping.Dtos.Reports;
+using Ping.Models.AppUsers;
 using Ping.Models.Reports;
 using Ping.Services.Storage;
 
@@ -14,8 +15,8 @@ namespace Ping.Services.Reports
     {
         public async Task<Report> CreateReportAsync(string reporterId, CreateReportDto dto, IFormFile? screenshot = null)
         {
-            // Validate: Bug reports don't need a TargetId, but all other report types do
-            if (dto.TargetType != ReportTargetType.Bug && string.IsNullOrWhiteSpace(dto.TargetId))
+            // Validate: Bug reports and app Feedback don't need a TargetId, but all other report types do
+            if (dto.TargetType != ReportTargetType.Bug && dto.TargetType != ReportTargetType.Feedback && string.IsNullOrWhiteSpace(dto.TargetId))
             {
                 throw new ArgumentException("TargetId is required for content reports (Ping, Review, Profile, Event, etc.).");
             }
@@ -47,7 +48,7 @@ namespace Ping.Services.Reports
             return report;
         }
 
-        public async Task<PaginatedResult<Report>> GetReportsAsync(PaginationParams pagination, ReportStatus? status = null)
+        public async Task<PaginatedResult<AdminReportDto>> GetReportsAsync(PaginationParams pagination, ReportStatus? status = null, ReportTargetType? targetType = null)
         {
             var query = context.Reports.AsQueryable();
 
@@ -56,9 +57,44 @@ namespace Ping.Services.Reports
                 query = query.Where(r => r.Status == status.Value);
             }
 
-            query = query.OrderByDescending(r => r.CreatedAt);
+            if (targetType.HasValue)
+            {
+                query = query.Where(r => r.TargetType == targetType.Value);
+            }
 
-            return await PaginatedResult<Report>.CreateAsync(query, pagination.PageNumber, pagination.PageSize);
+            // Left-join the reporter (Report has no navigation property) so the
+            // admin console can show who filed it; deleted accounts fall out as null.
+            var projected =
+                from r in query
+                join u in context.Set<AppUser>() on r.ReporterId equals u.Id into reporters
+                from u in reporters.DefaultIfEmpty()
+                orderby r.CreatedAt descending
+                select new AdminReportDto(
+                    r.Id,
+                    r.ReporterId,
+                    u != null ? u.UserName : null,
+                    u != null ? u.Email : null,
+                    r.TargetId,
+                    r.TargetType,
+                    r.Reason,
+                    r.Description,
+                    r.ScreenshotUrl,
+                    r.CreatedAt,
+                    r.Status
+                );
+
+            return await PaginatedResult<AdminReportDto>.CreateAsync(projected, pagination.PageNumber, pagination.PageSize);
+        }
+
+        public async Task<Report> UpdateReportStatusAsync(Guid reportId, ReportStatus status)
+        {
+            var report = await context.Reports.FirstOrDefaultAsync(r => r.Id == reportId)
+                ?? throw new KeyNotFoundException($"Report {reportId} not found.");
+
+            report.Status = status;
+            await context.SaveChangesAsync();
+
+            return report;
         }
     }
 }

@@ -40,11 +40,29 @@ namespace Ping.Controllers.Reports
 
         [HttpGet]
         [Authorize(Roles = "Admin")]
-        public async Task<ActionResult<PaginatedResult<Report>>> GetReports([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] ReportStatus? status = null)
+        public async Task<ActionResult<PaginatedResult<AdminReportDto>>> GetReports([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] ReportStatus? status = null, [FromQuery] ReportTargetType? targetType = null)
         {
             var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = pageSize };
-            var reports = await reportService.GetReportsAsync(pagination, status);
+            var reports = await reportService.GetReportsAsync(pagination, status, targetType);
             return Ok(reports);
+        }
+
+        /// <summary>
+        /// Updates a report's moderation status (Pending / Reviewed / Dismissed).
+        /// </summary>
+        [HttpPut("{id:guid}/status")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<Report>> UpdateStatus(Guid id, [FromBody] UpdateReportStatusDto dto)
+        {
+            try
+            {
+                var report = await reportService.UpdateReportStatusAsync(id, dto.Status);
+                return Ok(report);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
     }
 }

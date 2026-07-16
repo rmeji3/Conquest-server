@@ -4,14 +4,18 @@ namespace Ping.Models.Reports
 {
     public enum ReportTargetType
     {
-        Ping,
-        PingActivity,
-        Review,
-        Profile,
-        Bug,
-        Event,
-        EventComment,
-        Collection
+        Ping = 0,
+        PingActivity = 1,
+        Review = 2,
+        Profile = 3,
+        Bug = 4,
+        Event = 5,
+        EventComment = 6,
+        // 7 is intentionally unused: the shipped mobile app has always sent 8
+        // for Collection (its enum skips 7), and rows are already stored that
+        // way — the values here must match the wire/DB values.
+        Collection = 8,
+        Feedback = 9
     }
 
     public enum ReportStatus

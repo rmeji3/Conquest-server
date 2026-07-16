@@ -11,7 +11,8 @@ namespace Ping.Services.Reports
     {
         // Optional screenshotUrl parameter for when screenshot is already uploaded
         Task<Report> CreateReportAsync(string reporterId, CreateReportDto dto, IFormFile? screenshot = null);
-        Task<PaginatedResult<Report>> GetReportsAsync(PaginationParams pagination, ReportStatus? status = null);
+        Task<PaginatedResult<AdminReportDto>> GetReportsAsync(PaginationParams pagination, ReportStatus? status = null, ReportTargetType? targetType = null);
+        Task<Report> UpdateReportStatusAsync(Guid reportId, ReportStatus status);
     }
 }
 
