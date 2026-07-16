@@ -114,7 +114,9 @@ namespace Ping.Services.Verification
                 Title = "Verification Approved!",
                 Message = "Your verification request has been approved. Welcome to the verified community!",
                 ReferenceId = requestId.ToString(),
-                ImageThumbnailUrl = request.User?.ProfileImageUrl
+                // System notice about the user's own verification — no sender and
+                // no thumbnail, matching the rejection and business-claim notices.
+                ImageThumbnailUrl = null
             });
         }
 

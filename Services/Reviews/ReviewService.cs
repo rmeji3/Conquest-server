@@ -139,6 +139,9 @@ public class ReviewService(
             .Select(pa => new { pa.Ping.OwnerUserId, pa.Ping.Name, pa.Ping.IsDeleted })
             .FirstOrDefaultAsync();
 
+        var user = await userManager.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        string? profileUrl = user?.ProfileImageUrl;
+
         // Notify Ping Owner. Fire-and-forget: the push involves DB lookups plus an
         // external push-API call, and the reviewer shouldn't wait on someone else's
         // notification. A fresh DI scope is required because the request's scoped
@@ -150,7 +153,9 @@ public class ReviewService(
                 UserId = pingInfo.OwnerUserId,
                 SenderId = userId,
                 SenderName = userName,
-                SenderProfileImageUrl = review.ThumbnailUrl,
+                // The sender avatar is the reviewer's pfp (client shows initials
+                // when null); the review image rides along as ImageThumbnailUrl.
+                SenderProfileImageUrl = profileUrl,
                 Type = NotificationType.NewReviewOnYourPing,
                 Title = "New Review",
                 Message = $"{userName} reviewed {pingInfo.Name}.",
@@ -190,9 +195,6 @@ public class ReviewService(
                 logger.LogError(ex, "Achievement check failed after review creation for user {UserId}", userId);
             }
         });
-
-        var user = await userManager.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        string? profileUrl = user?.ProfileImageUrl;
 
         return new ReviewDto(
             review.Id,
