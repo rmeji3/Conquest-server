@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Ping.Models.Notifications;
 using Ping.Data.App;
 using Ping.Dtos.Common;
@@ -767,7 +768,14 @@ public class ReviewService(
                 Title = "New Reaction",
                 Message = $"{sender?.UserName ?? "Someone"} reacted to your review with the {sticker.Name} sticker.",
                 ReferenceId = reviewId.ToString(),
-                ImageThumbnailUrl = review.ThumbnailUrl ?? review.ImageUrl
+                ImageThumbnailUrl = review.ThumbnailUrl ?? review.ImageUrl,
+                // Lets the client draw the sticker over the review thumbnail in
+                // the notification list. Additive; old clients ignore metadata.
+                Metadata = JsonSerializer.Serialize(new
+                {
+                    stickerKey = sticker.Key,
+                    stickerImageUrl = sticker.ImageUrl
+                })
             });
         }
     }
