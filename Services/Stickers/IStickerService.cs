@@ -29,6 +29,10 @@ public interface IStickerService
     /// <summary>Gets a sticker by its unique database ID.</summary>
     Task<StickerDto?> GetStickerByIdAsync(string id);
 
+    /// <summary>Updates an existing sticker's name/category, and optionally replaces its image.
+    /// Throws <see cref="KeyNotFoundException"/> if the sticker does not exist.</summary>
+    Task<StickerDto> UpdateStickerAsync(string id, string name, string? category, IFormFile? file, string adminUserId);
+
     /// <summary>Lists all stickers in the system, active and inactive (for admins).</summary>
     Task<List<StickerDto>> GetAllStickersForAdminAsync();
 

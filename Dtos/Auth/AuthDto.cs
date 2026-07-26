@@ -57,12 +57,13 @@ namespace Ping.Dtos.Auth
     }
 
     public record UserDto(
-        string Id, 
-        string Email, 
-        string? DisplayName, 
+        string Id,
+        string Email,
+        string? DisplayName,
         string? ProfileImageUrl,
         string[] Roles,
-        bool TwoFactorEnabled
+        bool TwoFactorEnabled,
+        DateTimeOffset? CreatedUtc = null
     );
 
     // Refresh token request from the client

@@ -16,6 +16,9 @@ public interface IPingService
 
     Task DeletePingAsync(int id, string userId);
     Task DeletePingAsAdminAsync(int id);
+
+    /// <summary>Admin-only: marks a ping as an officially verified place, or reverts it to custom.</summary>
+    Task<PingDetailsDto> SetPingVerifiedAsync(int id, bool verified);
     Task AddFavoriteAsync(int id, string userId);
     Task UnfavoriteAsync(int id, string userId);
 }

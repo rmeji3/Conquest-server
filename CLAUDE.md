@@ -53,13 +53,44 @@ freely. Every server change must keep already-shipped clients working:
   (`IServiceScopeFactory`); never capture a request-scoped `DbContext` in a task
   that outlives the request.
 
+## Testing — required, not optional
+
+For any feature or service method you touch: check `Tests/Ping.Tests` for existing
+coverage of it first.
+
+- **Coverage exists** → update/extend it to reflect the new behavior; don't leave it
+  asserting the old behavior.
+- **No coverage exists** → write it. New service methods, new controller behavior,
+  and bug fixes (a fix without a regression test isn't done) all need tests.
+
+Match the test fixtures' `JsonStringEnumConverter` setup when asserting on API
+responses, and keep tests provider-agnostic (SQLite in `Tests/Ping.Tests`, Postgres
+in prod — see the Database section above).
+
+## Review the code you touch, not just the task
+
+Before finishing, re-read the file(s) you changed (and the immediate surrounding
+code, not just your diff) and flag anything you notice, even if out of scope for the
+requested change:
+
+- **Refactoring**: does it match the house patterns above (thin controllers, logic
+  in services, DTO projection in-query, etc.)? Call out anything that doesn't and
+  either fix it if it's small, or say so explicitly if it's a larger change.
+- **Security**: missing `[Authorize]`, unvalidated input, a query building
+  provider-specific SQL without the `Database.ProviderName` guard, secrets or PII
+  logged, an entity returned directly from a list/read endpoint instead of a
+  projected DTO.
+- **Performance/correctness**: N+1 queries, loading whole entities to map in memory,
+  missing pagination on a list endpoint, a fire-and-forget task capturing a
+  request-scoped `DbContext` instead of a fresh DI scope.
+
+Report findings plainly at the end of your response — don't silently fix things
+outside the requested scope without calling them out, and don't stay quiet about
+something you noticed just because it wasn't asked about.
+
 ## Before you're done
 
 ```sh
 dotnet build --nologo -v q   # zero warnings expected
 dotnet test  --nologo -v q   # full suite, runs on SQLite
 ```
-
-Add or extend tests in `Tests/Ping.Tests` when changing service behavior that has
-existing coverage; match the test fixtures' `JsonStringEnumConverter` setup when
-asserting on API responses.

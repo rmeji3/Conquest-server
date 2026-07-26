@@ -513,7 +513,25 @@ public class PingService(
         await db.SaveChangesAsync();
         logger.LogInformation("Ping soft-deleted by admin: {PingId}", id);
     }
-    
+
+    public async Task<PingDetailsDto> SetPingVerifiedAsync(int id, bool verified)
+    {
+        var ping = await db.Pings.FindAsync(id);
+        if (ping == null) throw new KeyNotFoundException("Ping not found");
+
+        ping.Type = verified ? PingType.Verified : PingType.Custom;
+        await db.SaveChangesAsync();
+        logger.LogInformation("Ping verification set by admin: {PingId} -> {Verified}", id, verified);
+
+        var updated = await db.Pings
+            .AsNoTracking()
+            .Include(x => x.PingActivities)
+            .Include(x => x.PingGenre)
+            .FirstAsync(x => x.Id == id);
+
+        return await ToPingDetailsDto(updated, null);
+    }
+
     public async Task AddFavoriteAsync(int id, string userId)
     {
         var exists = await db.Favorited

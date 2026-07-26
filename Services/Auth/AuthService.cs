@@ -319,7 +319,7 @@ public class AuthService(
         if (user is null) throw new KeyNotFoundException("User not found.");
 
         var roles = await users.GetRolesAsync(user);
-        return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.ProfileImageUrl, roles.ToArray(), user.TwoFactorEnabled);
+        return new UserDto(user.Id, user.Email ?? "", user.UserName!, user.ProfileImageUrl, roles.ToArray(), user.TwoFactorEnabled, user.CreatedUtc);
     }
 
     public async Task<object> ForgotPasswordAsync(ForgotPasswordDto dto, string scheme, string host)

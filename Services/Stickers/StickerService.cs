@@ -172,6 +172,28 @@ public class StickerService : IStickerService
         return new StickerDto(sticker.Id, sticker.Key, sticker.Name, sticker.ImageUrl, sticker.Category, sticker.IsActive);
     }
 
+    public async Task<StickerDto> UpdateStickerAsync(string id, string name, string? category, IFormFile? file, string adminUserId)
+    {
+        var sticker = await _context.Stickers.FindAsync(id);
+        if (sticker == null)
+        {
+            throw new KeyNotFoundException($"Sticker with ID {id} not found.");
+        }
+
+        sticker.Name = name.Trim();
+        sticker.Category = category?.Trim();
+
+        if (file != null)
+        {
+            var (originalUrl, _) = await _imageService.ProcessAndUploadImageAsync(file, "stickers", adminUserId);
+            sticker.ImageUrl = originalUrl;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return new StickerDto(sticker.Id, sticker.Key, sticker.Name, sticker.ImageUrl, sticker.Category, sticker.IsActive, sticker.InRotation);
+    }
+
     public async Task<List<StickerDto>> GetAllStickersForAdminAsync()
     {
         return await _context.Stickers

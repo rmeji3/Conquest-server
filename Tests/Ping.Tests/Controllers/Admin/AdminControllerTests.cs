@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http.Json;
 using Ping.Dtos.Auth;
+using Ping.Dtos.Pings;
+using Ping.Dtos.Stickers;
+using Ping.Models.Pings;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ping.Tests.Controllers.Admin;
@@ -164,6 +167,109 @@ public class AdminControllerTests : BaseIntegrationTest
         Assert.NotNull(userResponse3);
         Assert.Equal(userRequest.UserName.ToUpper(), userResponse3.Username.ToUpper());
         Assert.Equal("Testing", userResponse3.BanReason);
+    }
+
+    [Fact]
+    public async Task TestGetUsersSortedByRecent()
+    {
+        // Arrange
+        Authenticate("adminUser", "Admin");
+
+        var olderUser = new RegisterDto("older@email.com", "Password1!", "Old", "User", "olderuser");
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsJsonAsync("/api/auth/register", olderUser)).StatusCode);
+
+        var newerUser = new RegisterDto("newer@email.com", "Password1!", "New", "User", "neweruser");
+        Assert.Equal(HttpStatusCode.OK, (await _client.PostAsJsonAsync("/api/auth/register", newerUser)).StatusCode);
+
+        // Act: sort by most recently joined
+        var result = await _client.GetFromJsonAsync<PaginatedResultShape<UserDto>>(
+            "/api/admin/users?sortBy=recent&limit=2");
+
+        // Assert: the most recently registered user comes first
+        Assert.NotNull(result);
+        var items = result.Items.ToList();
+        Assert.True(items.Count >= 2);
+        Assert.Equal(newerUser.UserName.ToUpper(), items[0].DisplayName!.ToUpper());
+        Assert.NotNull(items[0].CreatedUtc);
+    }
+
+    // System.Text.Json can't bind PaginatedResult<T>'s primary constructor (param names
+    // don't match property names), so tests deserialize into this equivalent shape instead.
+    private record PaginatedResultShape<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize, int TotalPages);
+
+    [Fact]
+    public async Task TestUpdateSticker()
+    {
+        // Arrange
+        Authenticate("adminUser", "Admin");
+
+        using var createForm = new MultipartFormDataContent
+        {
+            { new StringContent("edit_test_sticker"), "key" },
+            { new StringContent("Original Name"), "name" },
+            { new StringContent("custom"), "category" }
+        };
+        var createResponse = await _client.PostAsync("/api/admin/stickers", createForm);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<StickerDto>();
+        Assert.NotNull(created);
+
+        // Act: edit the sticker's name and category
+        using var updateForm = new MultipartFormDataContent
+        {
+            { new StringContent("Updated Name"), "name" },
+            { new StringContent("badge"), "category" }
+        };
+        var updateResponse = await _client.PutAsync($"/api/admin/stickers/{created.Id}", updateForm);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<StickerDto>();
+        Assert.NotNull(updated);
+        Assert.Equal("Updated Name", updated.Name);
+        Assert.Equal("badge", updated.Category);
+        Assert.Equal(created.Key, updated.Key);
+    }
+
+    [Fact]
+    public async Task TestSetPingVerified()
+    {
+        // Arrange
+        Authenticate("adminUser", "Admin");
+
+        var placeRequest = new UpsertPingDto(
+            "Verify Test Place",
+            "123 Verify St",
+            40.7128,
+            -74.0060,
+            PingVisibility.Public,
+            PingType.Custom,
+            null,
+            null);
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        jsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+
+        var placeResponse = await _client.PostAsJsonAsync("/api/pings", placeRequest);
+        Assert.Equal(HttpStatusCode.Created, placeResponse.StatusCode);
+        var place = await placeResponse.Content.ReadFromJsonAsync<PingDetailsDto>(jsonOptions);
+        Assert.NotNull(place);
+        Assert.Equal(PingType.Custom, place.Type);
+
+        // Act: verify it
+        var verifyResponse = await _client.PutAsJsonAsync($"/api/admin/pings/{place.Id}/verify", new { verified = true });
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, verifyResponse.StatusCode);
+        var verified = await verifyResponse.Content.ReadFromJsonAsync<PingDetailsDto>(jsonOptions);
+        Assert.NotNull(verified);
+        Assert.Equal(PingType.Verified, verified.Type);
+
+        // Act: unverify it
+        var unverifyResponse = await _client.PutAsJsonAsync($"/api/admin/pings/{place.Id}/verify", new { verified = false });
+        Assert.Equal(HttpStatusCode.OK, unverifyResponse.StatusCode);
+        var unverified = await unverifyResponse.Content.ReadFromJsonAsync<PingDetailsDto>(jsonOptions);
+        Assert.NotNull(unverified);
+        Assert.Equal(PingType.Custom, unverified.Type);
     }
 }
 

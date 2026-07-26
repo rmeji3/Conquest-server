@@ -81,6 +81,7 @@ namespace Ping.Controllers
                     p.Name,
                     p.Address,
                     GenreName = p.PingGenreName,
+                    p.Type,
                 });
 
             return Ok(items);
@@ -91,6 +92,20 @@ namespace Ping.Controllers
         {
             await pingService.DeletePingAsAdminAsync(id);
             return Ok(new { message = $"Ping {id} deleted." });
+        }
+
+        [HttpPut("pings/{id}/verify")]
+        public async Task<ActionResult<Ping.Dtos.Pings.PingDetailsDto>> SetPingVerified(int id, [FromBody] SetPingVerifiedRequest request)
+        {
+            try
+            {
+                var ping = await pingService.SetPingVerifiedAsync(id, request.Verified);
+                return Ok(ping);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound($"Ping {id} not found.");
+            }
         }
 
         [HttpDelete("reviews/{id}")]
@@ -270,14 +285,16 @@ namespace Ping.Controllers
         public async Task<ActionResult<PaginatedResult<UserDto>>> GetUsers(
             [FromQuery] int page = 1,
             [FromQuery] int limit = 20,
-            [FromQuery] string? search = null)
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] int? joinedWithinDays = null)
         {
             var query = userManager.Users;
 
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var lowerSearch = search.Trim().ToLower();
-                query = query.Where(u => 
+                query = query.Where(u =>
                     (u.UserName != null && u.UserName.ToLower().Contains(lowerSearch)) ||
                     (u.Email != null && u.Email.ToLower().Contains(lowerSearch)) ||
                     (u.FirstName != null && u.FirstName.ToLower().Contains(lowerSearch)) ||
@@ -285,7 +302,15 @@ namespace Ping.Controllers
                 );
             }
 
-            query = query.OrderBy(u => u.UserName);
+            if (joinedWithinDays is > 0)
+            {
+                var cutoff = DateTimeOffset.UtcNow.AddDays(-joinedWithinDays.Value);
+                query = query.Where(u => u.CreatedUtc >= cutoff);
+            }
+
+            query = sortBy == "recent"
+                ? query.OrderByDescending(u => u.CreatedUtc)
+                : query.OrderBy(u => u.UserName);
 
             var count = await query.CountAsync();
             var items = await query.Skip((page - 1) * limit).Take(limit).ToListAsync();
@@ -308,7 +333,8 @@ namespace Ping.Controllers
                 user.UserName!,
                 user.ProfileImageUrl,
                 rolesLookup.TryGetValue(user.Id, out var roles) ? roles! : Array.Empty<string>(),
-                user.TwoFactorEnabled
+                user.TwoFactorEnabled,
+                user.CreatedUtc
             )).ToList();
 
             return Ok(new PaginatedResult<UserDto>(userDtos, count, page, limit));
@@ -500,6 +526,31 @@ namespace Ping.Controllers
             var sticker = await stickerService.GetStickerByIdAsync(id);
             if (sticker == null) return NotFound();
             return Ok(sticker);
+        }
+
+        [HttpPut("stickers/{id}")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<StickerDto>> UpdateSticker(
+            string id,
+            [FromForm] string name,
+            [FromForm] string? category,
+            IFormFile? file)
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (adminId == null) return Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("Sticker Name is required.");
+
+            try
+            {
+                var sticker = await stickerService.UpdateStickerAsync(id, name, category, file, adminId);
+                return Ok(sticker);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound($"Sticker with ID {id} not found.");
+            }
         }
 
         [HttpPut("stickers/{id}/toggle")]
@@ -718,6 +769,11 @@ namespace Ping.Controllers
     public class StickerRotationRequest
     {
         public bool InRotation { get; set; }
+    }
+
+    public class SetPingVerifiedRequest
+    {
+        public bool Verified { get; set; }
     }
 
     public class IpBanRequest

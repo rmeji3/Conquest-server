@@ -29,7 +29,7 @@ namespace Ping.Features.Auth
             var (refreshTokenRaw, refreshExpires) = await CreateRefreshTokenAsync(user.Id, deviceId);
 
             var roles = await users.GetRolesAsync(user);
-            var userDto = new UserDto(user.Id, user.Email ?? "", user.UserName!, user.ProfileImageUrl, roles.ToArray(), user.TwoFactorEnabled);
+            var userDto = new UserDto(user.Id, user.Email ?? "", user.UserName!, user.ProfileImageUrl, roles.ToArray(), user.TwoFactorEnabled, user.CreatedUtc);
 
             return new AuthResponse(
                 accessToken.Jwt,
