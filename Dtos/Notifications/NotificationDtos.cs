@@ -9,6 +9,10 @@ public record RegisterDeviceDto(
     bool? IsProduction = null
 );
 
+public record UnregisterDeviceDto(
+    [Required] string DeviceToken
+);
+
 public record NotificationPreferenceDto(
     NotificationType Type,
     string TypeName,

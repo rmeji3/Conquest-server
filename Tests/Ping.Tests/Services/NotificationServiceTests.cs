@@ -110,6 +110,26 @@ public class NotificationServiceTests
     }
 
     [Fact]
+    public async Task UnregisterDeviceAsync_ShouldRemoveMatchingDevice()
+    {
+        await _service.RegisterDeviceAsync("user1", "ExponentPushToken[abc]", DevicePlatform.Apple, isProduction: true);
+
+        await _service.UnregisterDeviceAsync("user1", "ExponentPushToken[abc]");
+
+        var devices = await _context.UserDevices.Where(d => d.UserId == "user1").ToListAsync();
+        Assert.Empty(devices);
+    }
+
+    [Fact]
+    public async Task UnregisterDeviceAsync_ShouldNotThrow_WhenDeviceDoesNotExist()
+    {
+        await _service.UnregisterDeviceAsync("user1", "ExponentPushToken[missing]");
+
+        var devices = await _context.UserDevices.Where(d => d.UserId == "user1").ToListAsync();
+        Assert.Empty(devices);
+    }
+
+    [Fact]
     public async Task GetUnreadCountAsync_ShouldReturnCorrectCount()
     {
         // Arrange

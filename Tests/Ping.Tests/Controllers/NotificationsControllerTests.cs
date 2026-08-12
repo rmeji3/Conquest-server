@@ -4,6 +4,7 @@ using Ping.Data.App;
 using Ping.Dtos.Notifications;
 using Ping.Models;
 using Ping.Models.Notifications;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -54,6 +55,42 @@ public class NotificationsControllerTests : BaseIntegrationTest
         Assert.NotNull(result);
         Assert.NotEmpty(result!.Items);
         Assert.Equal("Test Notification", result.Items[0].Title);
+    }
+
+    [Fact]
+    public async Task UnregisterDevice_ShouldRemoveDevice()
+    {
+        // Arrange
+        var userId = Authenticate("user1");
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            context.UserDevices.Add(new UserDevice
+            {
+                UserId = userId,
+                DeviceToken = "ExponentPushToken[abc]",
+                Platform = DevicePlatform.Apple
+            });
+            await context.SaveChangesAsync();
+        }
+
+        // Act
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/notifications/register-device")
+        {
+            Content = JsonContent.Create(new UnregisterDeviceDto("ExponentPushToken[abc]"))
+        };
+        var response = await Client.SendAsync(request);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var remaining = await context.UserDevices.Where(d => d.UserId == userId).ToListAsync();
+            Assert.Empty(remaining);
+        }
     }
 
     [Fact]

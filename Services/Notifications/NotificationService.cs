@@ -179,6 +179,19 @@ public class NotificationService : INotificationService
         _logger.LogInformation("Registered push device for User {UserId} Platform {Platform}", userId, platform);
     }
 
+    public async Task UnregisterDeviceAsync(string userId, string deviceToken)
+    {
+        var device = await _context.UserDevices
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.DeviceToken == deviceToken);
+
+        if (device != null)
+        {
+            _context.UserDevices.Remove(device);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Unregistered push device for User {UserId}", userId);
+        }
+    }
+
     private static bool IsUniqueViolation(DbUpdateException ex)
     {
         // PostgreSQL SQLSTATE 23505 = unique_violation. Checked via the exception name to

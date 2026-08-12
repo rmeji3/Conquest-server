@@ -15,6 +15,7 @@ public interface INotificationService
     
     // Device management
     Task RegisterDeviceAsync(string userId, string deviceToken, DevicePlatform platform, bool isProduction);
+    Task UnregisterDeviceAsync(string userId, string deviceToken);
     
     // Preferences
     Task<List<Ping.Dtos.Notifications.NotificationPreferenceDto>> GetPreferencesAsync(string userId);

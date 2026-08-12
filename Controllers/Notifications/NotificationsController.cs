@@ -93,6 +93,20 @@ public class NotificationsController : ControllerBase
         return Ok();
     }
 
+    /// <summary>
+    /// Removes a device's push token, e.g. on logout, so the device stops
+    /// receiving push notifications for this user.
+    /// </summary>
+    [HttpDelete("register-device")]
+    public async Task<IActionResult> UnregisterDevice(UnregisterDeviceDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+
+        await _notificationService.UnregisterDeviceAsync(userId, dto.DeviceToken);
+        return Ok();
+    }
+
     [HttpGet("preferences")]
     public async Task<ActionResult<List<NotificationPreferenceDto>>> GetPreferences()
     {
