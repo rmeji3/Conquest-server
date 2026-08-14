@@ -52,6 +52,7 @@ namespace Ping.Controllers
         Ping.Services.Admin.IDbJanitorService janitorService,
         AuthDbContext authDbContext,
         Ping.Services.Admin.IAnnouncementService announcementService,
+        Ping.Services.Admin.IMinVersionService minVersionService,
         IServiceScopeFactory scopeFactory,
         ILogger<AdminController> logger
         ) : ControllerBase
@@ -759,10 +760,23 @@ namespace Ping.Controllers
 
             return Ok(new { message = "Announcement updated successfully." });
         }
+
+        [HttpPost("app-version")]
+        public async Task<IActionResult> SetMinVersion([FromBody] MinVersionRequest request)
+        {
+            await minVersionService.SetMinVersionAsync(request.MinVersion, request.Message);
+            return Ok(new { message = "Minimum app version updated successfully." });
+        }
     }
 
     public class AnnouncementRequest
     {
+        public string? Message { get; set; }
+    }
+
+    public class MinVersionRequest
+    {
+        public string? MinVersion { get; set; }
         public string? Message { get; set; }
     }
 

@@ -326,6 +326,7 @@ builder.Services.AddHostedService<Ping.Services.Background.PingGenreClassificati
 
 builder.Services.AddScoped<Ping.Services.Admin.IDbJanitorService, Ping.Services.Admin.DbJanitorService>();
 builder.Services.AddSingleton<Ping.Services.Admin.IAnnouncementService, Ping.Services.Admin.AnnouncementService>();
+builder.Services.AddSingleton<Ping.Services.Admin.IMinVersionService, Ping.Services.Admin.MinVersionService>();
 // --- AWS S3 & Storage & Email ---
 var awsOptions = builder.Configuration.GetAWSOptions();
 var awsAccessKey = builder.Configuration["AWS:AccessKey"];

@@ -92,6 +92,12 @@ public class NotificationService : INotificationService
             body = notification.Message,
             sound = "default",
             badge = badgeCount,
+            // Renders the notification image outside the app. Android shows it out of
+            // the box; iOS additionally needs a Notification Service Extension in the
+            // client to fetch/attach it, so this is a no-op there until that's added.
+            richContent = notification.ImageThumbnailUrl != null
+                ? new { image = notification.ImageThumbnailUrl }
+                : null,
             data = new
             {
                 notificationId = notification.Id,
@@ -101,8 +107,12 @@ public class NotificationService : INotificationService
             }
         };
 
+        var jsonOptions = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
         var request = new HttpRequestMessage(HttpMethod.Post, "https://exp.host/--/api/v2/push/send");
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+        request.Content = new StringContent(JsonSerializer.Serialize(payload, jsonOptions), System.Text.Encoding.UTF8, "application/json");
 
         var token = _config.GetValue<string>("Expo:AccessToken");
         if (!string.IsNullOrEmpty(token))
