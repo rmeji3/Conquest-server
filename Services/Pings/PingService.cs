@@ -98,7 +98,11 @@ public class PingService(
                     var googlePlace = await pingNameService.GetGooglePlaceByIdAsync(dto.GooglePlaceId);
                     if (googlePlace != null)
                     {
-                        var isMatch = await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, finalName);
+                        // An unchanged name needs no AI call. The semantic check is
+                        // non-deterministic, and any reply that isn't exactly "TRUE"
+                        // downgrades the ping — never risk that when the names already agree.
+                        var isMatch = NamesMatch(googlePlace.Name, finalName)
+                            || await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, finalName);
                         if (isMatch)
                         {
                             logger.LogInformation("AI Verified: '{User}' matches '{Official}'. Keeping Verified status.", finalName, googlePlace.Name);
@@ -108,6 +112,13 @@ public class PingService(
                             if (googlePlace.Lat.HasValue && googlePlace.Lng.HasValue)
                             {
                                 dto = dto with { Latitude = googlePlace.Lat.Value, Longitude = googlePlace.Lng.Value };
+                            }
+
+                            // Fill a blank address from the place we just fetched. Only when
+                            // blank — a user-supplied address must never be clobbered.
+                            if (string.IsNullOrWhiteSpace(dto.Address) && !string.IsNullOrWhiteSpace(googlePlace.Address))
+                            {
+                                dto = dto with { Address = googlePlace.Address };
                             }
 
                             // Duplicate GooglePlaceId is handled idempotently at the top of
@@ -305,7 +316,11 @@ public class PingService(
                  var googlePlace = await pingNameService.GetGooglePlaceByIdAsync(ping.GooglePlaceId);
                  if (googlePlace != null)
                  {
-                     if (!await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, targetName))
+                     // Compare against the official name first: renaming a ping back to
+                     // what Google calls it must never cost it its verified status.
+                     var isMatch = NamesMatch(googlePlace.Name, targetName)
+                         || await semanticService.VerifyPlaceNameMatchAsync(googlePlace.Name, targetName);
+                     if (!isMatch)
                      {
                           logger.LogWarning("Update Ping: Name '{User}' does NOT match '{Official}'. Force downgrading to Custom.", targetName, googlePlace.Name);
                           ping.Type = PingType.Custom;
@@ -356,6 +371,16 @@ public class PingService(
 
         return await ToPingDetailsDto(p, userId);
     }
+    /// <summary>
+    /// True when the user's name is the official Google name up to casing and surrounding
+    /// whitespace. Used to skip the semantic check entirely so an unchanged name can never
+    /// lose its verified status to a flaky AI response.
+    /// </summary>
+    private static bool NamesMatch(string? officialName, string? userProvidedName) =>
+        !string.IsNullOrWhiteSpace(officialName) &&
+        !string.IsNullOrWhiteSpace(userProvidedName) &&
+        string.Equals(officialName.Trim(), userProvidedName.Trim(), StringComparison.OrdinalIgnoreCase);
+
     private static double DistanceKm(double lat1, double lng1, double lat2, double lng2)
     {
         var dLat = (lat2 - lat1) * Math.PI / 180.0;
